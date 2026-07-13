@@ -13,7 +13,7 @@ import { buildFormatTags, detectFormatFromTags } from "./formatTags.js";
 import { detectMediaType } from "./mediaType.js";
 
 const DEMO_DURATION = 236;
-const IDLE_DELAY = 2500;
+const IDLE_DELAY = 500;
 const RECENTER_FEEDBACK_DURATION = 900;
 const WRITE_TAGS_SETTING_KEY = "eagle-vr-player.write-format-tags.v1";
 const IS_IMAGE_DEMO =
