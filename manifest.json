@@ -1,0 +1,18 @@
+{
+  "id": "453c8400-ed73-4827-ab14-4c2fd5d6383c",
+  "version": "0.1.0",
+  "platform": "all",
+  "arch": "all",
+  "name": "VR Player",
+  "logo": "/logo.png",
+  "keywords": ["VR", "VR180", "VR360", "video", "preview"],
+  "devTools": false,
+  "main": {
+    "url": "dist/index.html",
+    "width": 1280,
+    "height": 800,
+    "minWidth": 720,
+    "minHeight": 520,
+    "backgroundColor": "#05080c"
+  }
+}
