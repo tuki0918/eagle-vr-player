@@ -449,6 +449,7 @@ function VrViewport({
 export function App() {
   const videoRef = useRef(null);
   const idleTimerRef = useRef(null);
+  const controlsHoveredRef = useRef(false);
   const demoStartRef = useRef(0);
   const demoOffsetRef = useRef(84);
   const dropDepthRef = useRef(0);
@@ -514,10 +515,41 @@ export function App() {
     }
     setControlsVisible(true);
     window.clearTimeout(idleTimerRef.current);
-    if (!isDragging && !isOptionsOpen) {
+    if (!isDragging && !isOptionsOpen && !controlsHoveredRef.current) {
       idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), IDLE_DELAY);
     }
   }, [focusMode, isDragging, isOptionsOpen]);
+
+  const holdControlsVisible = useCallback(() => {
+    controlsHoveredRef.current = true;
+    setControlsVisible(true);
+    window.clearTimeout(idleTimerRef.current);
+  }, []);
+
+  const handleControlsPointerMove = useCallback(
+    (event) => {
+      event.stopPropagation();
+      holdControlsVisible();
+    },
+    [holdControlsVisible],
+  );
+
+  const resumeControlsIdleTimer = useCallback(() => {
+    controlsHoveredRef.current = false;
+    window.clearTimeout(idleTimerRef.current);
+    if (!focusMode && !isDragging && !isOptionsOpen) {
+      idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), IDLE_DELAY);
+    }
+  }, [focusMode, isDragging, isOptionsOpen]);
+
+  const handlePlayerPointerActivity = useCallback(
+    (event) => {
+      controlsHoveredRef.current =
+        event.target instanceof Element && Boolean(event.target.closest(".control-surface"));
+      revealControls();
+    },
+    [revealControls],
+  );
 
   useEffect(() => {
     if (!isOptionsOpen) return;
@@ -840,6 +872,7 @@ export function App() {
 
   const enterFocusMode = useCallback(() => {
     window.clearTimeout(idleTimerRef.current);
+    controlsHoveredRef.current = false;
     setIsOptionsOpen(false);
     setControlsVisible(false);
     setFocusMode(true);
@@ -897,8 +930,8 @@ export function App() {
       className={`player-shell ${controlsVisible ? "controls-visible" : "controls-hidden"} ${
         isDragging ? "is-dragging" : ""
       } ${focusMode ? "focus-mode" : ""}`}
-      onPointerMove={revealControls}
-      onPointerDown={revealControls}
+      onPointerMove={handlePlayerPointerActivity}
+      onPointerDown={handlePlayerPointerActivity}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -976,6 +1009,9 @@ export function App() {
       <header
         className="top-bar control-surface"
         aria-hidden={!controlsVisible}
+        onPointerEnter={holdControlsVisible}
+        onPointerMove={handleControlsPointerMove}
+        onPointerLeave={resumeControlsIdleTimer}
       >
         <div className="file-meta">
           <strong title={item.name}>{item.name}</strong>
@@ -1123,6 +1159,9 @@ export function App() {
         className={`transport control-surface${playbackDisabled ? " has-static-media" : ""}`}
         aria-label={playbackDisabled ? "Image preview controls" : "Playback controls"}
         aria-hidden={!controlsVisible}
+        onPointerEnter={holdControlsVisible}
+        onPointerMove={handleControlsPointerMove}
+        onPointerLeave={resumeControlsIdleTimer}
       >
         <button
           className="play-button"

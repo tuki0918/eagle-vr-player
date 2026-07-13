@@ -10,6 +10,7 @@ When implementing from a selected generated mock, treat that image as the source
 
 - The selected visual direction is `design-reference/option-1.png`: an immersive edge-to-edge VR canvas with minimal floating controls.
 - Controls should begin fading away after approximately 0.5 seconds of inactivity and return immediately on pointer, touch, or keyboard activity.
+- Keep controls visible while the pointer is over the top bar, playback controls, or their popovers; restart the idle countdown after the pointer leaves.
 - View dragging must remain available while video playback is running.
 - The plugin display name is `VR Player`.
 - Focus mode keeps view dragging available, hides the main controls, and uses an unobtrusive lower-right exit control.
