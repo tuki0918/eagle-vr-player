@@ -835,6 +835,31 @@ select:focus-visible {
   transform: rotate(-90deg);
 }
 
+.transport.has-static-media {
+  grid-template-columns: 48px minmax(240px, 1fr) 44px 40px;
+}
+
+.play-button:disabled,
+.volume-button:disabled {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+}
+
+.play-button:disabled:hover,
+.volume-button:disabled:hover {
+  background: transparent;
+}
+
+.range:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.volume-control.is-disabled .volume-popover {
+  display: none;
+}
+
 .status-toast {
   position: absolute;
   z-index: 6;
@@ -869,6 +894,10 @@ select:focus-visible {
     grid-template-columns: 44px auto minmax(140px, 1fr) 44px 38px;
     gap: 9px;
     padding: 0 16px;
+  }
+
+  .transport.has-static-media {
+    grid-template-columns: 44px minmax(140px, 1fr) 44px 38px;
   }
 }
 

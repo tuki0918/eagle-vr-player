@@ -5,7 +5,7 @@
   "arch": "all",
   "name": "VR Player",
   "logo": "/logo.png",
-  "keywords": ["VR", "VR180", "VR360", "video", "preview"],
+  "keywords": ["VR", "VR180", "VR360", "video", "image", "preview"],
   "devTools": false,
   "main": {
     "url": "dist/index.html",

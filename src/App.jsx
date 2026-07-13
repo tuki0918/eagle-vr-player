@@ -10,12 +10,14 @@ import { SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import * as THREE from "three";
 import { subscribeToEagleLifecycle } from "./eagleLifecycle.js";
 import { buildFormatTags, detectFormatFromTags } from "./formatTags.js";
+import { detectMediaType } from "./mediaType.js";
 
 const DEMO_DURATION = 236;
 const IDLE_DELAY = 2500;
 const RECENTER_FEEDBACK_DURATION = 900;
-const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "m4v", "webm", "mkv", "avi"]);
 const WRITE_TAGS_SETTING_KEY = "eagle-vr-player.write-format-tags.v1";
+const IS_IMAGE_DEMO =
+  import.meta.env.DEV && new URLSearchParams(window.location.search).get("media") === "image";
 
 function getInitialWriteTagsSetting() {
   try {
@@ -142,12 +144,15 @@ function FormatToggleGroup({ label, value, onChange, options, tabbable }) {
 function VrViewport({
   videoRef,
   mediaSource,
+  mediaType,
   projection,
   stereo,
   recenterSignal,
   onInteraction,
   onDragStateChange,
   onFirstDrag,
+  onImageLoaded,
+  onMediaError,
 }) {
   const hostRef = useRef(null);
   const cameraRef = useRef(null);
@@ -160,6 +165,8 @@ function VrViewport({
   const interactionRef = useRef(onInteraction);
   const dragStateRef = useRef(onDragStateChange);
   const firstDragRef = useRef(onFirstDrag);
+  const imageLoadedRef = useRef(onImageLoaded);
+  const mediaErrorRef = useRef(onMediaError);
 
   useEffect(() => {
     projectionRef.current = projection;
@@ -167,7 +174,9 @@ function VrViewport({
     interactionRef.current = onInteraction;
     dragStateRef.current = onDragStateChange;
     firstDragRef.current = onFirstDrag;
-  }, [onDragStateChange, onFirstDrag, onInteraction, projection, stereo]);
+    imageLoadedRef.current = onImageLoaded;
+    mediaErrorRef.current = onMediaError;
+  }, [onDragStateChange, onFirstDrag, onImageLoaded, onInteraction, onMediaError, projection, stereo]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -182,8 +191,12 @@ function VrViewport({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.domElement.className = "vr-canvas";
-    renderer.domElement.setAttribute("aria-label", "VR video. Drag to look around.");
+    renderer.domElement.setAttribute(
+      "aria-label",
+      `${mediaType === "image" ? "VR image" : "VR video"}. Drag to look around.`,
+    );
     renderer.domElement.setAttribute("role", "img");
+    renderer.domElement.dataset.mediaType = mediaType;
     renderer.domElement.dataset.projection = projectionRef.current;
     renderer.domElement.dataset.geometryCoverage = projectionRef.current === "VR180" ? "180" : "360";
     host.appendChild(renderer.domElement);
@@ -231,7 +244,7 @@ function VrViewport({
     };
 
     const loadTexture = () => {
-      if (mediaSource && videoRef.current) {
+      if (mediaType === "video" && mediaSource && videoRef.current) {
         sourceVideo = videoRef.current;
         if (
           sourceVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
@@ -246,18 +259,37 @@ function VrViewport({
         return;
       }
 
-      new THREE.TextureLoader().load("./assets/coastal-panorama.png", (texture) => {
-        if (disposed) {
-          texture.dispose();
-          return;
-        }
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.wrapS = THREE.RepeatWrapping;
-        configureStereo(texture);
-        textureRef.current = texture;
-        material.map = texture;
-        material.needsUpdate = true;
-      });
+      const textureSource = mediaType === "image" && mediaSource
+        ? mediaSource
+        : "./assets/coastal-panorama.png";
+      new THREE.TextureLoader().load(
+        textureSource,
+        (texture) => {
+          if (disposed) {
+            texture.dispose();
+            return;
+          }
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = THREE.RepeatWrapping;
+          configureStereo(texture);
+          textureRef.current = texture;
+          material.map = texture;
+          material.needsUpdate = true;
+          renderer.domElement.dataset.imageTexture = "ready";
+
+          if (mediaType === "image" && mediaSource) {
+            const image = texture.image;
+            imageLoadedRef.current?.({
+              width: image?.naturalWidth || image?.width || 0,
+              height: image?.naturalHeight || image?.height || 0,
+            });
+          }
+        },
+        undefined,
+        () => {
+          if (!disposed) mediaErrorRef.current?.("This image format cannot be decoded.");
+        },
+      );
     };
 
     loadTexture();
@@ -353,7 +385,7 @@ function VrViewport({
       renderer.domElement.remove();
       sphereRef.current = null;
     };
-  }, [mediaSource, videoRef]);
+  }, [mediaSource, mediaType, videoRef]);
 
   useEffect(() => {
     yawRef.current = 0;
@@ -426,14 +458,21 @@ export function App() {
   const tagWriteQueueRef = useRef(Promise.resolve());
   const moreOptionsRef = useRef(null);
   const recenterFeedbackTimerRef = useRef(null);
-  const [item, setItem] = useState({ name: "Coastal_Walk_8K.mp4", width: 7680, height: 3840 });
-  const [mediaSource, setMediaSource] = useState("");
+  const [item, setItem] = useState(
+    IS_IMAGE_DEMO
+      ? { name: "coastal-panorama.png", width: 4096, height: 2048 }
+      : { name: "Coastal_Walk_8K.mp4", width: 7680, height: 3840 },
+  );
+  const [mediaSource, setMediaSource] = useState(
+    IS_IMAGE_DEMO ? "./assets/coastal-panorama.png" : "",
+  );
+  const [mediaType, setMediaType] = useState(IS_IMAGE_DEMO ? "image" : "video");
   const [sourceError, setSourceError] = useState("");
   const [projection, setProjection] = useState("VR180");
-  const [stereo, setStereo] = useState("SBS");
+  const [stereo, setStereo] = useState(IS_IMAGE_DEMO ? "Mono" : "SBS");
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(84);
-  const [duration, setDuration] = useState(DEMO_DURATION);
+  const [currentTime, setCurrentTime] = useState(IS_IMAGE_DEMO ? 0 : 84);
+  const [duration, setDuration] = useState(IS_IMAGE_DEMO ? 0 : DEMO_DURATION);
   const [volume, setVolume] = useState(0.78);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
@@ -446,6 +485,7 @@ export function App() {
   const [writeTagsEnabled, setWriteTagsEnabled] = useState(getInitialWriteTagsSetting);
   const [eagleItemRevision, setEagleItemRevision] = useState(0);
   const [tagWriteStatus, setTagWriteStatus] = useState("No Eagle item is connected.");
+  const playbackDisabled = mediaType === "image";
 
   useEffect(() => {
     try {
@@ -500,12 +540,10 @@ export function App() {
   const loadDroppedFile = useCallback(
     (file) => {
       if (!file) return;
-      const dotIndex = file.name.lastIndexOf(".");
-      const ext = dotIndex >= 0 ? file.name.slice(dotIndex + 1).toLowerCase() : "";
-      const isSupportedVideo = file.type.startsWith("video/") || VIDEO_EXTENSIONS.has(ext);
+      const nextMediaType = detectMediaType(file);
 
-      if (!isSupportedVideo) {
-        setSourceError("Drop a video file to load it.");
+      if (!nextMediaType) {
+        setSourceError("Drop a supported video or image file to load it.");
         revealControls();
         return;
       }
@@ -518,6 +556,11 @@ export function App() {
       droppedObjectUrlRef.current = objectUrl;
       setItem({ name: file.name, width: 0, height: 0 });
       setMediaSource(objectUrl);
+      setMediaType(nextMediaType);
+      if (nextMediaType === "image") {
+        setProjection("VR180");
+        setStereo("Mono");
+      }
       setSourceError("");
       setCurrentTime(0);
       setDuration(0);
@@ -576,21 +619,27 @@ export function App() {
           selectedEagleItemRef.current = null;
           setEagleItemRevision((revision) => revision + 1);
           setTagWriteStatus("No Eagle item is selected.");
-          setSourceError("Select a video in Eagle, then open the player again.");
+          setSourceError("Select a video or image in Eagle, then open the player again.");
           return;
         }
         const ext = selectedItem.ext?.toLowerCase();
-        if (!VIDEO_EXTENSIONS.has(ext)) {
+        const nextMediaType = detectMediaType({ ext });
+        if (!nextMediaType) {
           selectedEagleItemRef.current = null;
           setEagleItemRevision((revision) => revision + 1);
-          setSourceError(`.${ext || "unknown"} is not a supported video format.`);
+          setSourceError(`.${ext || "unknown"} is not a supported video or image format.`);
           return;
         }
         selectedEagleItemRef.current = selectedItem;
         setEagleItemRevision((revision) => revision + 1);
         const detectedFormat = detectFormatFromTags(selectedItem.tags);
-        if (detectedFormat.projection) setProjection(detectedFormat.projection);
-        if (detectedFormat.stereo) setStereo(detectedFormat.stereo);
+        if (nextMediaType === "image") {
+          setProjection(detectedFormat.projection || "VR180");
+          setStereo(detectedFormat.stereo || "Mono");
+        } else {
+          if (detectedFormat.projection) setProjection(detectedFormat.projection);
+          if (detectedFormat.stereo) setStereo(detectedFormat.stereo);
+        }
         const detectedLabels = [detectedFormat.projection, detectedFormat.stereo].filter(Boolean);
         setTagWriteStatus(
           detectedLabels.length > 0
@@ -603,11 +652,15 @@ export function App() {
           height: selectedItem.height || 0,
         });
         releaseDroppedSource();
+        videoRef.current?.pause();
+        setIsPlaying(false);
+        setDuration(0);
+        setMediaType(nextMediaType);
         setMediaSource(selectedItem.fileURL || `file://${selectedItem.filePath}`);
         setCurrentTime(0);
       } catch (error) {
         console.error("Failed to load the selected Eagle item", error);
-        setSourceError("The selected video could not be loaded.");
+        setSourceError("The selected media could not be loaded.");
       }
     };
 
@@ -693,6 +746,7 @@ export function App() {
 
   const togglePlayback = useCallback(async () => {
     revealControls();
+    if (playbackDisabled) return;
     const video = videoRef.current;
     if (mediaSource && video) {
       if (video.paused) {
@@ -715,9 +769,10 @@ export function App() {
       if (nextPlaying) setShowRecenterFeedback(false);
       return nextPlaying;
     });
-  }, [mediaSource, revealControls]);
+  }, [mediaSource, playbackDisabled, revealControls]);
 
   const seek = (nextTime) => {
+    if (playbackDisabled) return;
     const value = Number(nextTime);
     setCurrentTime(value);
     demoOffsetRef.current = value;
@@ -727,6 +782,7 @@ export function App() {
   };
 
   const setPlayerVolume = (nextVolume) => {
+    if (playbackDisabled) return;
     const value = Number(nextVolume);
     setVolume(value);
     if (videoRef.current) videoRef.current.volume = value;
@@ -792,16 +848,16 @@ export function App() {
         event.preventDefault();
         if (focusMode) exitFocusMode();
         else enterFocusMode();
-      } else if (event.code === "Space") {
+      } else if (event.code === "Space" && !playbackDisabled) {
         event.preventDefault();
         togglePlayback();
       } else if (event.key.toLowerCase() === "r") recenter();
-      else if (event.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
-      else if (event.key === "ArrowLeft") seek(Math.max(0, currentTime - 5));
+      else if (event.key === "ArrowRight" && !playbackDisabled) seek(Math.min(duration, currentTime + 5));
+      else if (event.key === "ArrowLeft" && !playbackDisabled) seek(Math.max(0, currentTime - 5));
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentTime, duration, enterFocusMode, exitFocusMode, focusMode, isOptionsOpen, recenter, revealControls, togglePlayback]);
+  }, [currentTime, duration, enterFocusMode, exitFocusMode, focusMode, isOptionsOpen, playbackDisabled, recenter, revealControls, togglePlayback]);
 
   const displayedFormatTags = buildFormatTags([], projection, stereo);
 
@@ -825,11 +881,12 @@ export function App() {
       data-projection={projection}
       data-stereo={stereo}
       data-drop-active={isDropActive ? "true" : "false"}
+      data-media-type={mediaType}
     >
       <video
         ref={videoRef}
         className="source-video"
-        src={mediaSource || undefined}
+        src={mediaType === "video" ? mediaSource || undefined : undefined}
         preload="auto"
         playsInline
         onLoadedMetadata={(event) => {
@@ -852,18 +909,27 @@ export function App() {
         }}
         onPause={() => setIsPlaying(false)}
         onEnded={() => setIsPlaying(false)}
-        onError={() => mediaSource && setSourceError("This video format cannot be decoded.")}
+        onError={() => mediaType === "video" && mediaSource && setSourceError("This video format cannot be decoded.")}
       />
 
       <VrViewport
         videoRef={videoRef}
         mediaSource={mediaSource}
+        mediaType={mediaType}
         projection={projection}
         stereo={stereo}
         recenterSignal={recenterSignal}
         onInteraction={handleViewportInteraction}
         onDragStateChange={setIsDragging}
         onFirstDrag={() => setHasDragged(true)}
+        onImageLoaded={({ width, height }) => {
+          setItem((currentItem) => ({
+            ...currentItem,
+            width: width || currentItem.width,
+            height: height || currentItem.height,
+          }));
+        }}
+        onMediaError={setSourceError}
       />
 
       <div className={`drop-overlay ${isDropActive ? "is-active" : ""}`} aria-hidden={!isDropActive}>
@@ -871,8 +937,8 @@ export function App() {
           <span className="drop-icon" aria-hidden="true">
             <FileVideo size={29} weight="regular" />
           </span>
-          <strong>Drop a video to load it</strong>
-          <span>MP4, MOV, WebM, and more</span>
+          <strong>Drop a video or image to load it</strong>
+          <span>MP4, MOV, JPG, PNG, WebP, and more</span>
         </div>
       </div>
 
@@ -882,7 +948,7 @@ export function App() {
       >
         <div className="file-meta">
           <strong title={item.name}>{item.name}</strong>
-          <span>{item.width && item.height ? `${item.width}×${item.height}` : "VR Video"}</span>
+          <span>{item.width && item.height ? `${item.width}×${item.height}` : mediaType === "image" ? "VR Image" : "VR Video"}</span>
         </div>
 
         <div className="format-controls" role="group" aria-label="VR format">
@@ -1023,8 +1089,8 @@ export function App() {
       {sourceError ? <div className="status-toast" role="status">{sourceError}</div> : null}
 
       <section
-        className="transport control-surface"
-        aria-label="Playback controls"
+        className={`transport control-surface${playbackDisabled ? " has-static-media" : ""}`}
+        aria-label={playbackDisabled ? "Image preview controls" : "Playback controls"}
         aria-hidden={!controlsVisible}
       >
         <button
@@ -1033,12 +1099,15 @@ export function App() {
           tabIndex={controlsVisible ? 0 : -1}
           onClick={togglePlayback}
           aria-label={isPlaying ? "Pause" : "Play"}
+          disabled={playbackDisabled}
         >
           {isPlaying ? <Pause size={25} weight="fill" /> : <Play size={25} weight="fill" />}
         </button>
-        <span className="time-readout">
-          {formatTime(currentTime)} <span>/ {formatTime(duration)}</span>
-        </span>
+        {playbackDisabled ? null : (
+          <span className="time-readout">
+            {formatTime(currentTime)} <span>/ {formatTime(duration)}</span>
+          </span>
+        )}
         <input
           className="range progress-range"
           aria-label="Seek"
@@ -1047,17 +1116,19 @@ export function App() {
           max={duration || DEMO_DURATION}
           step="0.05"
           value={Math.min(currentTime, duration || DEMO_DURATION)}
-          tabIndex={controlsVisible ? 0 : -1}
+          tabIndex={controlsVisible && !playbackDisabled ? 0 : -1}
+          disabled={playbackDisabled}
           onChange={(event) => seek(event.target.value)}
           style={{ "--range-progress": `${(currentTime / Math.max(duration, 1)) * 100}%` }}
         />
-        <div className="volume-control">
+        <div className={`volume-control${playbackDisabled ? " is-disabled" : ""}`}>
           <button
             className="volume-button"
             type="button"
-            tabIndex={controlsVisible ? 0 : -1}
+            tabIndex={controlsVisible && !playbackDisabled ? 0 : -1}
             aria-label={volume === 0 ? "Unmute" : "Mute"}
             onClick={() => setPlayerVolume(volume === 0 ? 0.78 : 0)}
+            disabled={playbackDisabled}
           >
             {volume === 0 ? <SpeakerSlash size={25} /> : <SpeakerHigh size={25} />}
           </button>
@@ -1070,7 +1141,8 @@ export function App() {
               max="1"
               step="0.01"
               value={volume}
-              tabIndex={controlsVisible ? 0 : -1}
+              tabIndex={controlsVisible && !playbackDisabled ? 0 : -1}
+              disabled={playbackDisabled}
               onChange={(event) => setPlayerVolume(event.target.value)}
               style={{ "--range-progress": `${volume * 100}%` }}
             />

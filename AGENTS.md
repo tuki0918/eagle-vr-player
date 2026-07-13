@@ -18,3 +18,4 @@ When implementing from a selected generated mock, treat that image as the source
 - Keep tooltips on Recenter view and Focus mode; Play / Pause and Exit Focus do not use tooltips.
 - The plugin icon uses a clear white `VR` wordmark with an integrated play symbol, a cyan 180-degree arc, and a violet 360-degree orbit. Do not include numeric `180` / `360` labels or a visible outer frame; keep the area outside the rounded tile transparent.
 - Keep the editable 1024 × 1024 icon master as `logo-source.png`. The distributable `logo.png` and `dist/logo.png` must be 128 × 128 pixels for Eagle.
+- VR still images are previewable alongside videos. Images default to VR180 and Mono when format tags are absent. While an image is open, playback, timeline seeking, and volume controls remain visible but disabled, with no time or `Still image` label.

@@ -1,15 +1,16 @@
 # Eagle | VR Player
 
-An Eagle window plugin for previewing VR180 and VR360 video on the desktop. Load the video selected in Eagle, drag the image to look around, and verify projection and stereo layout without putting on a headset.
+An Eagle window plugin for previewing VR180 and VR360 video and still images on the desktop. Load the media selected in Eagle, drag the view to look around, and verify projection and stereo layout without putting on a headset.
 
 ![VR Player preview](docs/vr-player-preview.png)
 
 ## Features
 
 - VR180 and VR360 projection modes
-- Side-by-side (SBS), top/bottom (TB), and monoscopic video layouts
-- Automatically loads the video currently selected in Eagle
-- Drag-and-drop support for opening another local video
+- Side-by-side (SBS), top/bottom (TB), and monoscopic media layouts
+- Automatically loads the video or image currently selected in Eagle
+- Still-image preview defaulting to VR180 and Mono, with playback, seek, and volume controls disabled
+- Drag-and-drop support for opening another local video or image
 - View dragging during playback and mouse-wheel zoom
 - Automatic format detection from Eagle tags
 - Optional format-tag writing, disabled by default and remembered between sessions
@@ -32,7 +33,7 @@ An Eagle window plugin for previewing VR180 and VR360 video on the desktop. Load
    ```
 
 3. In Eagle, open **Plugins → Developer Options** and load the `dist` directory.
-4. Select a video in Eagle and launch **VR Player**.
+4. Select a video or image in Eagle and launch **VR Player**.
 
 The build automatically includes `manifest.json` and the distributable `logo.png` in `dist`.
 
@@ -71,3 +72,5 @@ Run the development server to preview the interface with the bundled coastal pan
 ```sh
 npm run dev
 ```
+
+Open `/?media=image` on the development server to exercise the still-image state.
