@@ -458,6 +458,7 @@ export function App() {
   const tagWriteQueueRef = useRef(Promise.resolve());
   const moreOptionsRef = useRef(null);
   const recenterFeedbackTimerRef = useRef(null);
+  const dragPlaybackPendingRef = useRef(!IS_IMAGE_DEMO);
   const [item, setItem] = useState(
     IS_IMAGE_DEMO
       ? { name: "coastal-panorama.png", width: 4096, height: 2048 }
@@ -557,6 +558,7 @@ export function App() {
       setItem({ name: file.name, width: 0, height: 0 });
       setMediaSource(objectUrl);
       setMediaType(nextMediaType);
+      dragPlaybackPendingRef.current = nextMediaType === "video";
       if (nextMediaType === "image") {
         setProjection("VR180");
         setStereo("Mono");
@@ -655,6 +657,7 @@ export function App() {
         videoRef.current?.pause();
         setIsPlaying(false);
         setDuration(0);
+        dragPlaybackPendingRef.current = nextMediaType === "video";
         setMediaType(nextMediaType);
         setMediaSource(selectedItem.fileURL || `file://${selectedItem.filePath}`);
         setCurrentTime(0);
@@ -747,6 +750,7 @@ export function App() {
   const togglePlayback = useCallback(async () => {
     revealControls();
     if (playbackDisabled) return;
+    dragPlaybackPendingRef.current = false;
     const video = videoRef.current;
     if (mediaSource && video) {
       if (video.paused) {
@@ -770,6 +774,33 @@ export function App() {
       return nextPlaying;
     });
   }, [mediaSource, playbackDisabled, revealControls]);
+
+  const startPlaybackFromInitialDrag = useCallback(async () => {
+    if (mediaType !== "video" || !dragPlaybackPendingRef.current) return;
+    dragPlaybackPendingRef.current = false;
+
+    const video = videoRef.current;
+    if (mediaSource && video) {
+      if (!video.paused) return;
+      try {
+        setShowRecenterFeedback(false);
+        await video.play();
+        setIsPlaying(true);
+      } catch (error) {
+        console.error("Playback could not start from the initial drag", error);
+        setSourceError("Playback could not be started.");
+      }
+      return;
+    }
+
+    setShowRecenterFeedback(false);
+    setIsPlaying(true);
+  }, [mediaSource, mediaType]);
+
+  const handleFirstViewportDrag = useCallback(() => {
+    setHasDragged(true);
+    void startPlaybackFromInitialDrag();
+  }, [startPlaybackFromInitialDrag]);
 
   const seek = (nextTime) => {
     if (playbackDisabled) return;
@@ -921,7 +952,7 @@ export function App() {
         recenterSignal={recenterSignal}
         onInteraction={handleViewportInteraction}
         onDragStateChange={setIsDragging}
-        onFirstDrag={() => setHasDragged(true)}
+        onFirstDrag={handleFirstViewportDrag}
         onImageLoaded={({ width, height }) => {
           setItem((currentItem) => ({
             ...currentItem,
