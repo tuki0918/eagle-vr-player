@@ -50,7 +50,7 @@ The build automatically includes `manifest.json` and the distributable `logo.png
 | Enter focus mode | `F` |
 | Exit focus mode | `Esc` |
 
-The controls hide after approximately 0.5 seconds of inactivity and return on pointer, touch, or keyboard input. They remain visible while the pointer is over the top or playback controls.
+The controls hide after approximately 0.5 seconds of inactivity during playback and 1.5 seconds while paused, stopped, or viewing an image. They return on pointer, touch, or keyboard input and remain visible while the pointer is over the top or playback controls.
 
 ## Format Tags
 

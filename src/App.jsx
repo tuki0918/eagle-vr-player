@@ -13,7 +13,8 @@ import { buildFormatTags, detectFormatFromTags } from "./formatTags.js";
 import { detectMediaType } from "./mediaType.js";
 
 const DEMO_DURATION = 236;
-const IDLE_DELAY = 500;
+const PLAYING_IDLE_DELAY = 500;
+const PAUSED_IDLE_DELAY = 1500;
 const RECENTER_FEEDBACK_DURATION = 900;
 const WRITE_TAGS_SETTING_KEY = "eagle-vr-player.write-format-tags.v1";
 const IS_IMAGE_DEMO =
@@ -488,6 +489,7 @@ export function App() {
   const [eagleItemRevision, setEagleItemRevision] = useState(0);
   const [tagWriteStatus, setTagWriteStatus] = useState("No Eagle item is connected.");
   const playbackDisabled = mediaType === "image";
+  const idleDelay = isPlaying ? PLAYING_IDLE_DELAY : PAUSED_IDLE_DELAY;
 
   useEffect(() => {
     try {
@@ -516,9 +518,9 @@ export function App() {
     setControlsVisible(true);
     window.clearTimeout(idleTimerRef.current);
     if (!isDragging && !isOptionsOpen && !controlsHoveredRef.current) {
-      idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), IDLE_DELAY);
+      idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), idleDelay);
     }
-  }, [focusMode, isDragging, isOptionsOpen]);
+  }, [focusMode, idleDelay, isDragging, isOptionsOpen]);
 
   const holdControlsVisible = useCallback(() => {
     controlsHoveredRef.current = true;
@@ -538,9 +540,9 @@ export function App() {
     controlsHoveredRef.current = false;
     window.clearTimeout(idleTimerRef.current);
     if (!focusMode && !isDragging && !isOptionsOpen) {
-      idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), IDLE_DELAY);
+      idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), idleDelay);
     }
-  }, [focusMode, isDragging, isOptionsOpen]);
+  }, [focusMode, idleDelay, isDragging, isOptionsOpen]);
 
   const handlePlayerPointerActivity = useCallback(
     (event) => {
@@ -882,8 +884,8 @@ export function App() {
     window.clearTimeout(idleTimerRef.current);
     setFocusMode(false);
     setControlsVisible(true);
-    idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), IDLE_DELAY);
-  }, []);
+    idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), idleDelay);
+  }, [idleDelay]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
