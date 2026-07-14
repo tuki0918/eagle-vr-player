@@ -8,7 +8,7 @@ When implementing from a selected generated mock, treat that image as the source
 
 ## Product decisions
 
-- The selected visual direction is `design-reference/option-1.png`: an immersive edge-to-edge VR canvas with minimal floating controls.
+- The current implementation is the source of truth for the visual direction: an immersive edge-to-edge VR canvas with minimal floating controls.
 - Controls should begin fading away after approximately 0.5 seconds of inactivity during video playback and 1.5 seconds while paused, stopped, or viewing an image. They return immediately on pointer, touch, or keyboard activity.
 - Keep controls visible while the pointer is over the top bar, playback controls, or their popovers; restart the idle countdown after the pointer leaves.
 - View dragging must remain available while video playback is running.
