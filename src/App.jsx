@@ -866,13 +866,26 @@ export function App() {
     revealControls();
   };
 
-  const setPlayerVolume = (nextVolume) => {
+  const setPlayerVolume = useCallback(
+    (nextVolume) => {
+      if (playbackDisabled) return;
+      const value = Number(nextVolume);
+      setVolume(value);
+      if (videoRef.current) videoRef.current.volume = value;
+      revealControls();
+    },
+    [playbackDisabled, revealControls],
+  );
+
+  const toggleMute = useCallback(() => {
+    setPlayerVolume(volume === 0 ? 0.78 : 0);
+  }, [setPlayerVolume, volume]);
+
+  const toggleLooping = useCallback(() => {
     if (playbackDisabled) return;
-    const value = Number(nextVolume);
-    setVolume(value);
-    if (videoRef.current) videoRef.current.volume = value;
+    setIsLooping((looping) => !looping);
     revealControls();
-  };
+  }, [playbackDisabled, revealControls]);
 
   const recenter = useCallback(() => {
     setRecenterSignal((value) => value + 1);
@@ -937,13 +950,19 @@ export function App() {
       } else if (event.code === "Space" && !playbackDisabled) {
         event.preventDefault();
         togglePlayback();
+      } else if (event.key.toLowerCase() === "m" && !playbackDisabled) {
+        event.preventDefault();
+        toggleMute();
+      } else if (event.key.toLowerCase() === "l" && !playbackDisabled) {
+        event.preventDefault();
+        toggleLooping();
       } else if (event.key.toLowerCase() === "r") recenter();
       else if (event.key === "ArrowRight" && !playbackDisabled) seek(Math.min(duration, currentTime + 5));
       else if (event.key === "ArrowLeft" && !playbackDisabled) seek(Math.max(0, currentTime - 5));
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentTime, duration, enterFocusMode, exitFocusMode, focusMode, isOptionsOpen, playbackDisabled, recenter, revealControls, togglePlayback]);
+  }, [currentTime, duration, enterFocusMode, exitFocusMode, focusMode, isOptionsOpen, playbackDisabled, recenter, revealControls, toggleLooping, toggleMute, togglePlayback]);
 
   const displayedFormatTags = buildFormatTags([], projection, stereo);
 
@@ -1073,11 +1092,11 @@ export function App() {
             type="button"
             tabIndex={controlsVisible ? 0 : -1}
             onClick={recenter}
-            aria-label="Recenter view"
+            aria-label="Reset view"
             aria-describedby="recenter-tooltip"
           >
             <Crosshair size={25} weight="regular" aria-hidden="true" />
-            <ShortcutTooltip id="recenter-tooltip" label="Recenter view" shortcut="R" />
+            <ShortcutTooltip id="recenter-tooltip" label="Reset view" shortcut="R" />
           </button>
           <div className="more-options" ref={moreOptionsRef}>
             <button
@@ -1137,7 +1156,9 @@ export function App() {
                 <div className="options-title shortcut-list-title">Keyboard shortcuts</div>
                 <dl className="shortcut-list">
                   <div><dt>Play / Pause</dt><dd><kbd>Space</kbd></dd></div>
-                  <div><dt>Recenter view</dt><dd><kbd>R</kbd></dd></div>
+                  <div><dt>Mute / Unmute</dt><dd><kbd>M</kbd></dd></div>
+                  <div><dt>Loop playback</dt><dd><kbd>L</kbd></dd></div>
+                  <div><dt>Reset view</dt><dd><kbd>R</kbd></dd></div>
                   <div><dt>Focus mode</dt><dd><kbd>F</kbd></dd></div>
                   <div><dt>Exit focus</dt><dd><kbd>Esc</kbd></dd></div>
                   <div><dt>Seek −5 seconds</dt><dd><kbd>←</kbd></dd></div>
@@ -1219,12 +1240,10 @@ export function App() {
           className="loop-button"
           type="button"
           tabIndex={controlsVisible && !playbackDisabled ? 0 : -1}
-          onClick={() => {
-            setIsLooping((looping) => !looping);
-            revealControls();
-          }}
+          onClick={toggleLooping}
           aria-label={isLooping ? "Disable loop playback" : "Enable loop playback"}
           aria-pressed={isLooping}
+          aria-describedby="loop-playback-tooltip"
           disabled={playbackDisabled}
         >
           {isLooping ? (
@@ -1232,6 +1251,7 @@ export function App() {
           ) : (
             <RepeatOffIcon />
           )}
+          <ShortcutTooltip id="loop-playback-tooltip" label="Loop playback" shortcut="L" />
         </button>
         <div className={`volume-control${playbackDisabled ? " is-disabled" : ""}`}>
           <button
@@ -1239,7 +1259,7 @@ export function App() {
             type="button"
             tabIndex={controlsVisible && !playbackDisabled ? 0 : -1}
             aria-label={volume === 0 ? "Unmute" : "Mute"}
-            onClick={() => setPlayerVolume(volume === 0 ? 0.78 : 0)}
+            onClick={toggleMute}
             disabled={playbackDisabled}
           >
             {volume === 0 ? <SpeakerSlash size={25} /> : <SpeakerHigh size={25} />}

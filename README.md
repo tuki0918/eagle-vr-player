@@ -18,7 +18,7 @@ An Eagle window plugin for previewing VR180 and VR360 video and still images on 
 - Optional format-tag writing, disabled by default and remembered between sessions
 - Focus mode for uninterrupted playback and view control
 - Controls that fade out when the player is idle
-- Recenter feedback that fades out automatically
+- Reset-view feedback that fades out automatically
 
 ## Install for Development
 
@@ -46,8 +46,9 @@ The build automatically includes `manifest.json` and the distributable `logo.png
 | Look around | Drag the video |
 | Zoom | Mouse wheel |
 | Play / Pause | `Space` |
-| Toggle loop playback | Loop button |
-| Recenter view | `R` |
+| Mute / Unmute | `M` |
+| Toggle loop playback | `L` |
+| Reset view | `R` |
 | Seek backward / forward | `←` / `→` (5 seconds) |
 | Enter focus mode | `F` |
 | Exit focus mode | `Esc` |

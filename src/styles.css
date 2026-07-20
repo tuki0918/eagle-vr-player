@@ -736,6 +736,7 @@ select:focus-visible {
 }
 
 .recenter-button,
+.loop-button,
 .focus-mode-button {
   position: relative;
 }
@@ -794,6 +795,8 @@ select:focus-visible {
 
 .recenter-button:hover .shortcut-tooltip,
 .recenter-button:focus-visible .shortcut-tooltip,
+.loop-button:hover .shortcut-tooltip,
+.loop-button:focus-visible .shortcut-tooltip,
 .focus-mode-button:hover .shortcut-tooltip,
 .focus-mode-button:focus-visible .shortcut-tooltip {
   opacity: 1;
