@@ -255,6 +255,7 @@ button {
 .icon-button,
 .play-button,
 .volume-button,
+.loop-button,
 .focus-mode-button {
   display: inline-flex;
   align-items: center;
@@ -642,7 +643,7 @@ select:focus-visible {
   left: 50%;
   bottom: 48px;
   display: grid;
-  grid-template-columns: 48px auto minmax(240px, 1fr) 44px 40px;
+  grid-template-columns: 48px auto minmax(240px, 1fr) 38px 44px 40px;
   align-items: center;
   gap: 16px;
   width: min(980px, calc(100% - 64px));
@@ -710,10 +711,28 @@ select:focus-visible {
 }
 
 .volume-button,
+.loop-button,
 .focus-mode-button {
   width: 38px;
   height: 38px;
   border-radius: 10px;
+}
+
+.repeat-off-icon {
+  position: relative;
+  display: inline-flex;
+}
+
+.repeat-off-icon > span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 27px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 1.5px var(--surface-strong);
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 .recenter-button,
@@ -836,18 +855,20 @@ select:focus-visible {
 }
 
 .transport.has-static-media {
-  grid-template-columns: 48px minmax(240px, 1fr) 44px 40px;
+  grid-template-columns: 48px minmax(240px, 1fr) 38px 44px 40px;
 }
 
 .play-button:disabled,
-.volume-button:disabled {
+.volume-button:disabled,
+.loop-button:disabled {
   background: transparent;
   color: rgba(255, 255, 255, 0.3);
   cursor: not-allowed;
 }
 
 .play-button:disabled:hover,
-.volume-button:disabled:hover {
+.volume-button:disabled:hover,
+.loop-button:disabled:hover {
   background: transparent;
 }
 
@@ -891,13 +912,13 @@ select:focus-visible {
   }
 
   .transport {
-    grid-template-columns: 44px auto minmax(140px, 1fr) 44px 38px;
+    grid-template-columns: 44px auto minmax(140px, 1fr) 38px 44px 38px;
     gap: 9px;
     padding: 0 16px;
   }
 
   .transport.has-static-media {
-    grid-template-columns: 44px minmax(140px, 1fr) 44px 38px;
+    grid-template-columns: 44px minmax(140px, 1fr) 38px 44px 38px;
   }
 }
 

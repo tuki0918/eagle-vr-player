@@ -12,6 +12,7 @@ An Eagle window plugin for previewing VR180 and VR360 video and still images on 
 - Still-image preview defaulting to VR180 and Mono, with playback, seek, and volume controls disabled
 - Drag-and-drop support for opening another local video or image
 - Starts video playback when the first view drag begins without resuming on later drags after a pause
+- Optional loop playback from the transport controls
 - View dragging during playback and mouse-wheel zoom
 - Automatic format detection from Eagle tags
 - Optional format-tag writing, disabled by default and remembered between sessions
@@ -45,6 +46,7 @@ The build automatically includes `manifest.json` and the distributable `logo.png
 | Look around | Drag the video |
 | Zoom | Mouse wheel |
 | Play / Pause | `Space` |
+| Toggle loop playback | Loop button |
 | Recenter view | `R` |
 | Seek backward / forward | `←` / `→` (5 seconds) |
 | Enter focus mode | `F` |

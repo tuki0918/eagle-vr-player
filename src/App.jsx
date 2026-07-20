@@ -5,6 +5,7 @@ import { FileVideo } from "@phosphor-icons/react/FileVideo";
 import { HandGrabbing } from "@phosphor-icons/react/HandGrabbing";
 import { Pause } from "@phosphor-icons/react/Pause";
 import { Play } from "@phosphor-icons/react/Play";
+import { Repeat } from "@phosphor-icons/react/Repeat";
 import { SpeakerHigh } from "@phosphor-icons/react/SpeakerHigh";
 import { SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import * as THREE from "three";
@@ -84,6 +85,15 @@ function FocusModeIcon() {
       <path d="M9 4H5a1 1 0 0 0-1 1v4M15 4h4a1 1 0 0 1 1 1v4M9 20H5a1 1 0 0 1-1-1v-4M15 20h4a1 1 0 0 0 1-1v-4" />
       <circle cx="12" cy="12" r="2.25" />
     </svg>
+  );
+}
+
+function RepeatOffIcon() {
+  return (
+    <span className="repeat-off-icon" aria-hidden="true">
+      <Repeat size={23} weight="regular" />
+      <span />
+    </span>
   );
 }
 
@@ -477,6 +487,7 @@ export function App() {
   const [currentTime, setCurrentTime] = useState(IS_IMAGE_DEMO ? 0 : 84);
   const [duration, setDuration] = useState(IS_IMAGE_DEMO ? 0 : DEMO_DURATION);
   const [volume, setVolume] = useState(0.78);
+  const [isLooping, setIsLooping] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [hasDragged, setHasDragged] = useState(false);
@@ -714,14 +725,23 @@ export function App() {
     demoStartRef.current = performance.now();
     const interval = window.setInterval(() => {
       const elapsed = (performance.now() - demoStartRef.current) / 1000;
-      setCurrentTime((demoOffsetRef.current + elapsed) % DEMO_DURATION);
+      const nextTime = demoOffsetRef.current + elapsed;
+      if (!isLooping && nextTime >= DEMO_DURATION) {
+        setCurrentTime(DEMO_DURATION);
+        setIsPlaying(false);
+        return;
+      }
+      setCurrentTime(isLooping ? nextTime % DEMO_DURATION : nextTime);
     }, 200);
     return () => {
       const elapsed = (performance.now() - demoStartRef.current) / 1000;
-      demoOffsetRef.current = (demoOffsetRef.current + elapsed) % DEMO_DURATION;
+      const nextOffset = demoOffsetRef.current + elapsed;
+      demoOffsetRef.current = isLooping
+        ? nextOffset % DEMO_DURATION
+        : Math.min(nextOffset, DEMO_DURATION);
       window.clearInterval(interval);
     };
-  }, [isPlaying, mediaSource]);
+  }, [isLooping, isPlaying, mediaSource]);
 
   const queueFormatTagWrite = useCallback(
     (nextProjection, nextStereo) => {
@@ -940,6 +960,7 @@ export function App() {
       onDrop={handleDrop}
       data-testid="vr-player"
       data-playing={isPlaying ? "true" : "false"}
+      data-looping={isLooping ? "true" : "false"}
       data-controls-visible={controlsVisible ? "true" : "false"}
       data-focus-mode={focusMode ? "true" : "false"}
       data-has-dragged={hasDragged ? "true" : "false"}
@@ -955,6 +976,7 @@ export function App() {
         src={mediaType === "video" ? mediaSource || undefined : undefined}
         preload="auto"
         playsInline
+        loop={isLooping}
         onLoadedMetadata={(event) => {
           const video = event.currentTarget;
           const nextDuration = video.duration;
@@ -1193,6 +1215,24 @@ export function App() {
           onChange={(event) => seek(event.target.value)}
           style={{ "--range-progress": `${(currentTime / Math.max(duration, 1)) * 100}%` }}
         />
+        <button
+          className="loop-button"
+          type="button"
+          tabIndex={controlsVisible && !playbackDisabled ? 0 : -1}
+          onClick={() => {
+            setIsLooping((looping) => !looping);
+            revealControls();
+          }}
+          aria-label={isLooping ? "Disable loop playback" : "Enable loop playback"}
+          aria-pressed={isLooping}
+          disabled={playbackDisabled}
+        >
+          {isLooping ? (
+            <Repeat size={23} weight="regular" aria-hidden="true" />
+          ) : (
+            <RepeatOffIcon />
+          )}
+        </button>
         <div className={`volume-control${playbackDisabled ? " is-disabled" : ""}`}>
           <button
             className="volume-button"
