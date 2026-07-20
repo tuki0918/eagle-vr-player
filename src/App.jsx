@@ -925,6 +925,13 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (event) => {
       revealControls();
+      if (event.key === "Tab") {
+        event.preventDefault();
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        return;
+      }
       if (event.key === "Escape" && isOptionsOpen) {
         event.preventDefault();
         setIsOptionsOpen(false);
