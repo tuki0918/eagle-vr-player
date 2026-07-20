@@ -1,6 +1,6 @@
 # Eagle | VR Player
 
-An Eagle window plugin for previewing VR180 and VR360 video and still images on the desktop. Load the media selected in Eagle, drag the view to look around, and verify projection and stereo layout without putting on a headset.
+An Eagle window plugin for previewing VR180 and VR360 video and still images on the desktop. Load the media selected in Eagle and drag the view to look around without putting on a headset.
 
 ![VR Player preview](docs/vr-player-preview.png)
 
