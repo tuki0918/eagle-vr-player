@@ -20,6 +20,9 @@ An Eagle window plugin for previewing VR180 and VR360 video and still images on 
 - Controls that fade out when the player is idle
 - Reset-view feedback that fades out automatically
 
+> [!NOTE]
+> This player does not support stereoscopic rendering.
+
 ## Install for Development
 
 1. Install dependencies:
