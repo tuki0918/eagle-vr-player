@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { Crosshair } from "@phosphor-icons/react/Crosshair";
 import { DotsThree } from "@phosphor-icons/react/DotsThree";
 import { FileVideo } from "@phosphor-icons/react/FileVideo";
@@ -495,6 +496,7 @@ export function App() {
   const [showRecenterFeedback, setShowRecenterFeedback] = useState(false);
   const [isDropActive, setIsDropActive] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [writeTagsEnabled, setWriteTagsEnabled] = useState(getInitialWriteTagsSetting);
   const [eagleItemRevision, setEagleItemRevision] = useState(0);
@@ -1153,17 +1155,30 @@ export function App() {
                   </div>
                 </div>
                 <div className="options-divider" />
-                <div className="options-title shortcut-list-title">Keyboard shortcuts</div>
-                <dl className="shortcut-list">
-                  <div><dt>Play / Pause</dt><dd><kbd>Space</kbd></dd></div>
-                  <div><dt>Mute / Unmute</dt><dd><kbd>M</kbd></dd></div>
-                  <div><dt>Loop playback</dt><dd><kbd>L</kbd></dd></div>
-                  <div><dt>Reset view</dt><dd><kbd>R</kbd></dd></div>
-                  <div><dt>Focus mode</dt><dd><kbd>F</kbd></dd></div>
-                  <div><dt>Exit focus</dt><dd><kbd>Esc</kbd></dd></div>
-                  <div><dt>Seek −5 seconds</dt><dd><kbd>←</kbd></dd></div>
-                  <div><dt>Seek +5 seconds</dt><dd><kbd>→</kbd></dd></div>
-                </dl>
+                <button
+                  className="shortcut-disclosure"
+                  type="button"
+                  aria-expanded={isShortcutsOpen}
+                  aria-controls="keyboard-shortcut-list"
+                  onClick={() => setIsShortcutsOpen((open) => !open)}
+                >
+                  <span className="options-title shortcut-list-title">Keyboard shortcuts</span>
+                  <CaretDown className="shortcut-disclosure-caret" size={17} weight="bold" />
+                </button>
+                {isShortcutsOpen ? (
+                  <div className="shortcut-list-panel" id="keyboard-shortcut-list">
+                    <dl className="shortcut-list">
+                      <div><dt>Play / Pause</dt><dd><kbd>Space</kbd></dd></div>
+                      <div><dt>Mute / Unmute</dt><dd><kbd>M</kbd></dd></div>
+                      <div><dt>Loop playback</dt><dd><kbd>L</kbd></dd></div>
+                      <div><dt>Reset view</dt><dd><kbd>R</kbd></dd></div>
+                      <div><dt>Focus mode</dt><dd><kbd>F</kbd></dd></div>
+                      <div><dt>Exit focus</dt><dd><kbd>Esc</kbd></dd></div>
+                      <div><dt>Seek −5 seconds</dt><dd><kbd>←</kbd></dd></div>
+                      <div><dt>Seek +5 seconds</dt><dd><kbd>→</kbd></dd></div>
+                    </dl>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

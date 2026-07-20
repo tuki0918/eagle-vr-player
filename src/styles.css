@@ -433,7 +433,53 @@ button {
 }
 
 .shortcut-list-title {
-  margin-bottom: 9px;
+  margin: 0;
+}
+
+.shortcut-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.shortcut-disclosure:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.shortcut-disclosure-caret {
+  flex: none;
+  color: rgba(255, 255, 255, 0.6);
+  transition: transform 150ms ease;
+}
+
+.shortcut-disclosure[aria-expanded="true"] .shortcut-disclosure-caret {
+  transform: rotate(180deg);
+}
+
+.shortcut-list-panel {
+  height: 174px;
+  margin-top: 8px;
+  padding-right: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.shortcut-list-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.shortcut-list-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .shortcut-list {
