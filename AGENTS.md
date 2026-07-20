@@ -24,3 +24,4 @@ When implementing from a selected generated mock, treat that image as the source
 - Loop playback is toggled from a transport button positioned immediately to the left of volume or with `L`. It defaults to off and is disabled for still images. The icon shows the current state: repeat-off while disabled and the regular repeat icon while enabled, without using an active accent color. Mute / Unmute uses `M`.
 - Disable Tab and Shift+Tab focus traversal in the player. Pressing Tab clears any focused control so global keyboard shortcuts remain available.
 - Keep media details out of More options. Show an info icon immediately beside the filename; its popover contains format, resolution, duration for video, and file size.
+- Center the `Drag to look around` hint both horizontally and vertically within the VR canvas at every viewport size.
