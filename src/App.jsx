@@ -4,6 +4,7 @@ import { Crosshair } from "@phosphor-icons/react/Crosshair";
 import { DotsThree } from "@phosphor-icons/react/DotsThree";
 import { FileVideo } from "@phosphor-icons/react/FileVideo";
 import { HandGrabbing } from "@phosphor-icons/react/HandGrabbing";
+import { Info } from "@phosphor-icons/react/Info";
 import { Pause } from "@phosphor-icons/react/Pause";
 import { Play } from "@phosphor-icons/react/Play";
 import { Repeat } from "@phosphor-icons/react/Repeat";
@@ -49,6 +50,21 @@ function formatTime(seconds) {
   const minutes = Math.floor(safe / 60);
   const remainder = Math.floor(safe % 60);
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "Not available";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** unitIndex;
+  const precision = unitIndex === 0 || value >= 10 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function formatMediaType(name, mediaType) {
+  const extension = name.includes(".") ? name.split(".").pop()?.toUpperCase() : "";
+  const type = mediaType === "image" ? "Image" : "Video";
+  return extension ? `${extension} ${type}` : type;
 }
 
 function FormatIcon({ type }) {
@@ -470,12 +486,13 @@ export function App() {
   const selectedEagleItemRef = useRef(null);
   const tagWriteQueueRef = useRef(Promise.resolve());
   const moreOptionsRef = useRef(null);
+  const fileInfoRef = useRef(null);
   const recenterFeedbackTimerRef = useRef(null);
   const dragPlaybackPendingRef = useRef(!IS_IMAGE_DEMO);
   const [item, setItem] = useState(
     IS_IMAGE_DEMO
-      ? { name: "coastal-panorama.png", width: 4096, height: 2048 }
-      : { name: "Coastal_Walk_8K.mp4", width: 7680, height: 3840 },
+      ? { name: "coastal-panorama.png", width: 4096, height: 2048, size: 18_874_368 }
+      : { name: "Coastal_Walk_8K.mp4", width: 7680, height: 3840, size: 2_684_354_560 },
   );
   const [mediaSource, setMediaSource] = useState(
     IS_IMAGE_DEMO ? "./assets/coastal-panorama.png" : "",
@@ -496,6 +513,7 @@ export function App() {
   const [showRecenterFeedback, setShowRecenterFeedback] = useState(false);
   const [isDropActive, setIsDropActive] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [isFileInfoOpen, setIsFileInfoOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [writeTagsEnabled, setWriteTagsEnabled] = useState(getInitialWriteTagsSetting);
@@ -530,10 +548,10 @@ export function App() {
     }
     setControlsVisible(true);
     window.clearTimeout(idleTimerRef.current);
-    if (!isDragging && !isOptionsOpen && !controlsHoveredRef.current) {
+    if (!isDragging && !isOptionsOpen && !isFileInfoOpen && !controlsHoveredRef.current) {
       idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), idleDelay);
     }
-  }, [focusMode, idleDelay, isDragging, isOptionsOpen]);
+  }, [focusMode, idleDelay, isDragging, isFileInfoOpen, isOptionsOpen]);
 
   const holdControlsVisible = useCallback(() => {
     controlsHoveredRef.current = true;
@@ -552,10 +570,10 @@ export function App() {
   const resumeControlsIdleTimer = useCallback(() => {
     controlsHoveredRef.current = false;
     window.clearTimeout(idleTimerRef.current);
-    if (!focusMode && !isDragging && !isOptionsOpen) {
+    if (!focusMode && !isDragging && !isOptionsOpen && !isFileInfoOpen) {
       idleTimerRef.current = window.setTimeout(() => setControlsVisible(false), idleDelay);
     }
-  }, [focusMode, idleDelay, isDragging, isOptionsOpen]);
+  }, [focusMode, idleDelay, isDragging, isFileInfoOpen, isOptionsOpen]);
 
   const handlePlayerPointerActivity = useCallback(
     (event) => {
@@ -567,10 +585,10 @@ export function App() {
   );
 
   useEffect(() => {
-    if (!isOptionsOpen) return;
+    if (!isOptionsOpen && !isFileInfoOpen) return;
     setControlsVisible(true);
     window.clearTimeout(idleTimerRef.current);
-  }, [isOptionsOpen]);
+  }, [isFileInfoOpen, isOptionsOpen]);
 
   useEffect(() => {
     if (!isOptionsOpen) return undefined;
@@ -584,6 +602,19 @@ export function App() {
     document.addEventListener("pointerdown", closeOptionsOutside);
     return () => document.removeEventListener("pointerdown", closeOptionsOutside);
   }, [isOptionsOpen]);
+
+  useEffect(() => {
+    if (!isFileInfoOpen) return undefined;
+
+    const closeFileInfoOutside = (event) => {
+      if (!fileInfoRef.current?.contains(event.target)) {
+        setIsFileInfoOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeFileInfoOutside);
+    return () => document.removeEventListener("pointerdown", closeFileInfoOutside);
+  }, [isFileInfoOpen]);
 
   const loadDroppedFile = useCallback(
     (file) => {
@@ -602,7 +633,7 @@ export function App() {
       setEagleItemRevision((revision) => revision + 1);
       const objectUrl = URL.createObjectURL(file);
       droppedObjectUrlRef.current = objectUrl;
-      setItem({ name: file.name, width: 0, height: 0 });
+      setItem({ name: file.name, width: 0, height: 0, size: file.size || 0 });
       setMediaSource(objectUrl);
       setMediaType(nextMediaType);
       dragPlaybackPendingRef.current = nextMediaType === "video";
@@ -699,6 +730,7 @@ export function App() {
           name: `${selectedItem.name}.${selectedItem.ext}`,
           width: selectedItem.width || 0,
           height: selectedItem.height || 0,
+          size: selectedItem.size || 0,
         });
         releaseDroppedSource();
         videoRef.current?.pause();
@@ -911,6 +943,7 @@ export function App() {
     window.clearTimeout(idleTimerRef.current);
     controlsHoveredRef.current = false;
     setIsOptionsOpen(false);
+    setIsFileInfoOpen(false);
     setControlsVisible(false);
     setFocusMode(true);
   }, []);
@@ -930,6 +963,12 @@ export function App() {
         if (document.activeElement instanceof HTMLElement) {
           document.activeElement.blur();
         }
+        return;
+      }
+      if (event.key === "Escape" && isFileInfoOpen) {
+        event.preventDefault();
+        setIsFileInfoOpen(false);
+        fileInfoRef.current?.querySelector(".file-info-button")?.focus();
         return;
       }
       if (event.key === "Escape" && isOptionsOpen) {
@@ -971,7 +1010,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentTime, duration, enterFocusMode, exitFocusMode, focusMode, isOptionsOpen, playbackDisabled, recenter, revealControls, toggleLooping, toggleMute, togglePlayback]);
+  }, [currentTime, duration, enterFocusMode, exitFocusMode, focusMode, isFileInfoOpen, isOptionsOpen, playbackDisabled, recenter, revealControls, toggleLooping, toggleMute, togglePlayback]);
 
   const displayedFormatTags = buildFormatTags([], projection, stereo);
 
@@ -1067,7 +1106,56 @@ export function App() {
       >
         <div className="file-meta">
           <strong title={item.name}>{item.name}</strong>
-          <span>{item.width && item.height ? `${item.width}×${item.height}` : mediaType === "image" ? "VR Image" : "VR Video"}</span>
+          <div className="file-info" ref={fileInfoRef}>
+            <button
+              className="file-info-button"
+              type="button"
+              tabIndex={controlsVisible ? 0 : -1}
+              aria-label={`${mediaType === "image" ? "Image" : "Video"} details`}
+              aria-expanded={isFileInfoOpen}
+              aria-controls="media-details"
+              aria-haspopup="dialog"
+              onClick={() => {
+                setIsOptionsOpen(false);
+                setIsFileInfoOpen((open) => !open);
+                revealControls();
+              }}
+            >
+              <Info size={19} weight="bold" aria-hidden="true" />
+            </button>
+            {isFileInfoOpen ? (
+              <div
+                className="file-info-popover"
+                id="media-details"
+                role="dialog"
+                aria-label={`${mediaType === "image" ? "Image" : "Video"} details`}
+              >
+                <div className="file-info-title">
+                  {mediaType === "image" ? "Image details" : "Video details"}
+                </div>
+                <dl className="file-info-list">
+                  <div>
+                    <dt>Format</dt>
+                    <dd>{formatMediaType(item.name, mediaType)}</dd>
+                  </div>
+                  <div>
+                    <dt>Resolution</dt>
+                    <dd>{item.width && item.height ? `${item.width} × ${item.height}` : "Not available"}</dd>
+                  </div>
+                  {mediaType === "video" ? (
+                    <div>
+                      <dt>Duration</dt>
+                      <dd>{duration > 0 ? formatTime(duration) : "Not available"}</dd>
+                    </div>
+                  ) : null}
+                  <div>
+                    <dt>File size</dt>
+                    <dd>{formatFileSize(item.size)}</dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="format-controls" role="group" aria-label="VR format">
@@ -1116,6 +1204,7 @@ export function App() {
               aria-expanded={isOptionsOpen}
               aria-controls="player-settings"
               onClick={() => {
+                setIsFileInfoOpen(false);
                 setIsOptionsOpen((open) => !open);
                 revealControls();
               }}

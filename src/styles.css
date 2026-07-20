@@ -141,16 +141,15 @@ button {
 
 .file-meta {
   display: flex;
-  align-items: baseline;
-  gap: 20px;
+  align-items: center;
+  gap: 7px;
   width: 100%;
   min-width: 0;
-  overflow: hidden;
 }
 
 .file-meta strong {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -160,11 +159,91 @@ button {
   font-weight: 600;
 }
 
-.file-meta span {
+.file-info {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.file-info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
   flex: none;
   color: var(--text-muted);
-  font-size: 18px;
-  letter-spacing: 0.015em;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.file-info-button:hover,
+.file-info-button[aria-expanded="true"] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.file-info-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 12px);
+  left: -8px;
+  width: 280px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  background: rgba(7, 12, 18, 0.96);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.48);
+  color: #f7f9fc;
+  backdrop-filter: blur(20px);
+}
+
+.file-info-title {
+  margin-bottom: 9px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.file-info-list {
+  display: grid;
+  margin: 0;
+}
+
+.file-info-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 34px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.file-info-list > div:first-child {
+  border-top: 0;
+}
+
+.file-info-list dt,
+.file-info-list dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.file-info-list dt {
+  color: var(--text-muted);
+}
+
+.file-info-list dd {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .format-controls {
@@ -950,10 +1029,6 @@ select:focus-visible {
     grid-template-columns: minmax(0, 1fr) auto auto;
     column-gap: 16px;
     padding-inline: 20px;
-  }
-
-  .file-meta span {
-    display: none;
   }
 
   .file-meta strong {
