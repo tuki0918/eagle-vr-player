@@ -4,6 +4,7 @@
   "platform": "all",
   "arch": "all",
   "name": "VR Player",
+  "description": "View VR180 and VR360 media without a headset.",
   "logo": "/logo.png",
   "keywords": ["VR", "VR180", "VR360", "video", "image", "preview"],
   "devTools": false,
