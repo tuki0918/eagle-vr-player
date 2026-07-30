@@ -1569,7 +1569,7 @@ export function App() {
                 <label className="tag-write-setting">
                   <span>
                     <strong>Write format tags</strong>
-                    <small>Replaces only projection and mode tags</small>
+                    <small>Updates only vr:projection= and vr:mode=</small>
                   </span>
                   <input
                     type="checkbox"
