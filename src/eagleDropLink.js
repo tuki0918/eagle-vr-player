@@ -62,7 +62,7 @@ function isUsablePathApi(pathApi) {
   );
 }
 
-function normalizeForComparison(filePath, pathApi) {
+function normalizePath(filePath, pathApi) {
   if (typeof filePath !== "string" || filePath.length === 0) return null;
 
   let normalized = pathApi.normalize(filePath);
@@ -70,12 +70,21 @@ function normalizeForComparison(filePath, pathApi) {
   while (normalized.length > root.length && normalized.endsWith(pathApi.sep)) {
     normalized = normalized.slice(0, -pathApi.sep.length);
   }
-  return pathApi.sep === "\\" ? normalized.toLowerCase() : normalized;
+  return normalized;
 }
 
 function pathsMatch(left, right, pathApi) {
-  const normalizedLeft = normalizeForComparison(left, pathApi);
-  const normalizedRight = normalizeForComparison(right, pathApi);
+  const normalizedLeft = normalizePath(left, pathApi);
+  const normalizedRight = normalizePath(right, pathApi);
+  if (normalizedLeft === null || normalizedRight === null) return false;
+  return pathApi.sep === "\\"
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight;
+}
+
+function pathsMatchExactly(left, right, pathApi) {
+  const normalizedLeft = normalizePath(left, pathApi);
+  const normalizedRight = normalizePath(right, pathApi);
   return normalizedLeft !== null && normalizedLeft === normalizedRight;
 }
 
@@ -206,7 +215,7 @@ export async function loadDroppedEagleItem({
   const currentLibraryPath = eagleApi?.library?.path;
   if (
     !pathsMatch(currentLibraryPath, libraryPath, nativePath) ||
-    !pathsMatch(refreshedItem.filePath, droppedPath, nativePath)
+    !pathsMatchExactly(refreshedItem.filePath, droppedPath, nativePath)
   ) {
     return null;
   }

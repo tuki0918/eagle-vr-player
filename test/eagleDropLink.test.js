@@ -367,14 +367,13 @@ test("prefers Electron webUtils over the legacy File.path property", () => {
   assert.equal(getNativeDroppedPath(file, requireFn), itemPath);
 });
 
-test("matches Windows paths case-insensitively", async () => {
+test("matches Windows library paths case-insensitively after exact item verification", async () => {
   const windowsLibraryPath = "C:\\Users\\Test\\VR.library";
   const droppedPath =
     "c:\\users\\test\\vr.library\\IMAGES\\abc123.INFO\\PANORAMA.MP4";
   const item = {
     id: "ABC123",
-    filePath:
-      "C:\\Users\\Test\\VR.library\\images\\ABC123.info\\panorama.mp4",
+    filePath: droppedPath,
     isDeleted: false,
   };
 
@@ -388,6 +387,30 @@ test("matches Windows paths case-insensitively", async () => {
   });
 
   assert.equal(result, item);
+});
+
+test("rejects Windows item paths that differ only by case", async () => {
+  const windowsLibraryPath = "C:\\Users\\test\\VR.library";
+  const droppedPath =
+    "C:\\Users\\test\\VR.library\\images\\ABC123.info\\panorama.mp4";
+  const item = {
+    id: "ABC123",
+    filePath:
+      "C:\\Users\\test\\VR.library\\images\\ABC123.info\\Panorama.mp4",
+    isDeleted: false,
+  };
+
+  const result = await loadDroppedEagleItem({
+    file: { path: droppedPath },
+    eagleApi: createEagle({
+      currentLibraryPath: windowsLibraryPath,
+      items: [item],
+    }),
+    selectedItems: [],
+    pathApi: path.win32,
+  });
+
+  assert.equal(result, null);
 });
 
 test("does not collapse distinct Unicode path spellings", async () => {
