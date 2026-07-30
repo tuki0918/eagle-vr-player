@@ -12,7 +12,12 @@ import { SpeakerHigh } from "@phosphor-icons/react/SpeakerHigh";
 import { SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import * as THREE from "three";
 import { subscribeToEagleLifecycle } from "./eagleLifecycle.js";
-import { buildFormatTags, detectFormatFromTags } from "./formatTags.js";
+import {
+  buildFormatTags,
+  detectFormatFromTags,
+  loadFreshEagleItem,
+  saveFormatTags,
+} from "./formatTags.js";
 import { detectMediaType } from "./mediaType.js";
 
 const DEMO_DURATION = 236;
@@ -483,6 +488,7 @@ export function App() {
   const dropDepthRef = useRef(0);
   const droppedObjectUrlRef = useRef(null);
   const hasRequestedInitialEagleItemRef = useRef(false);
+  const eagleItemApiRef = useRef(null);
   const selectedEagleItemRef = useRef(null);
   const tagWriteQueueRef = useRef(Promise.resolve());
   const moreOptionsRef = useRef(null);
@@ -689,6 +695,7 @@ export function App() {
       try {
         if (!eagleApi?.item || !active || hasRequestedInitialEagleItemRef.current) return;
         hasRequestedInitialEagleItemRef.current = true;
+        eagleItemApiRef.current = eagleApi.item;
         setSourceError("");
         const selected = eagleApi.item.getSelected
           ? await eagleApi.item.getSelected()
@@ -780,7 +787,8 @@ export function App() {
   const queueFormatTagWrite = useCallback(
     (nextProjection, nextStereo) => {
       const eagleItem = selectedEagleItemRef.current;
-      if (!eagleItem?.save) {
+      const eagleItemApi = eagleItemApiRef.current;
+      if (!eagleItem?.id || !eagleItemApi?.get) {
         setTagWriteStatus("No Eagle item is available to update.");
         return;
       }
@@ -790,8 +798,10 @@ export function App() {
         .catch(() => undefined)
         .then(async () => {
           if (selectedEagleItemRef.current !== eagleItem) return;
-          eagleItem.tags = buildFormatTags(eagleItem.tags, nextProjection, nextStereo);
-          await eagleItem.save();
+          const freshEagleItem = await loadFreshEagleItem(eagleItemApi, eagleItem.id);
+          if (selectedEagleItemRef.current !== eagleItem) return;
+          await saveFormatTags(freshEagleItem, nextProjection, nextStereo);
+          eagleItem.tags = [...freshEagleItem.tags];
           if (selectedEagleItemRef.current === eagleItem) {
             setTagWriteStatus("Saved to Eagle.");
           }
@@ -1225,7 +1235,7 @@ export function App() {
                 <label className="tag-write-setting">
                   <span>
                     <strong>Write format tags</strong>
-                    <small>Sync now and when the format changes</small>
+                    <small>Replaces only projection and mode tags</small>
                   </span>
                   <input
                     type="checkbox"

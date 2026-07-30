@@ -25,3 +25,4 @@ When implementing from a selected generated mock, treat that image as the source
 - Disable Tab and Shift+Tab focus traversal in the player. Pressing Tab clears any focused control so global keyboard shortcuts remain available.
 - Keep media details out of More options. Show an info icon immediately beside the filename; its popover contains format, resolution, duration for video, and file size.
 - Center the `Drag to look around` hint both horizontally and vertically within the VR canvas at every viewport size.
+- Format-tag writing manages only `vr:projection=` and `vr:mode=`. Re-fetch the item by ID immediately before each save, preserve every other current tag including other `vr:*` tags, fail without writing if tags are not an array, and restore the item's original tag array when saving fails.

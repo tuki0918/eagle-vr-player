@@ -1,6 +1,6 @@
 # Eagle | VR Player
 
-An Eagle window plugin for previewing VR180 and VR360 video and still images on the desktop. Load the media selected in Eagle and drag the view to look around without putting on a headset.
+View VR180 and VR360 videos and images on your desktop without a headset. Load the media selected in Eagle and drag the view to look around.
 
 ![VR Player preview](docs/vr-player-preview.png)
 
@@ -70,7 +70,7 @@ vr:mode=TB
 vr:mode=Mono
 ```
 
-Enable **Write format tags** under **More options** to synchronize the current projection and layout back to the selected Eagle item. This option is off by default.
+Enable **Write format tags** under **More options** to save the current Projection and Stereo layout to the selected Eagle item. When you turn it on, VR Player immediately updates only the item's `vr:projection=` and `vr:mode=` tags. If you later change either setting in the player, VR Player updates the corresponding tag again. All other tags, including other `vr:*` tags added by you or another tool, are left unchanged. This option is off by default.
 
 ## Local Preview
 

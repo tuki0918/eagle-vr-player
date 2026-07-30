@@ -33,9 +33,12 @@ function normalizeTag(tag) {
     .replace(/[°_\s/\\-]+/g, "");
 }
 
-function isOwnedFormatTag(tag) {
+function isManagedFormatTag(tag) {
   const normalized = String(tag ?? "").trim().toLowerCase();
-  return normalized.startsWith(FORMAT_TAG_PREFIX);
+  return (
+    normalized.startsWith(`${FORMAT_TAG_PREFIX}projection=`) ||
+    normalized.startsWith(`${FORMAT_TAG_PREFIX}mode=`)
+  );
 }
 
 function detectPrefixedFormat(tags, prefix) {
@@ -61,7 +64,7 @@ export function detectFormatFromTags(tags = []) {
   let { projection, stereo } = currentFormat;
 
   for (const tag of tags) {
-    if (isOwnedFormatTag(tag)) continue;
+    if (isManagedFormatTag(tag)) continue;
     const normalized = normalizeTag(tag);
     if (!projection && PROJECTION_TAGS.has(normalized)) {
       projection = PROJECTION_TAGS.get(normalized);
@@ -75,8 +78,47 @@ export function detectFormatFromTags(tags = []) {
 }
 
 export function buildFormatTags(tags = [], projection, stereo) {
-  const preservedTags = tags.filter((tag) => !isOwnedFormatTag(tag));
+  const preservedTags = tags.filter((tag) => !isManagedFormatTag(tag));
   const projectionTag = CANONICAL_PROJECTION_TAGS[projection];
   const stereoTag = CANONICAL_STEREO_TAGS[stereo];
   return [...preservedTags, ...(projectionTag ? [projectionTag] : []), ...(stereoTag ? [stereoTag] : [])];
+}
+
+export async function loadFreshEagleItem(itemApi, itemId) {
+  if (!itemApi?.get || !itemId) {
+    throw new TypeError("An Eagle item API and item ID are required.");
+  }
+
+  const items = await itemApi.get({ id: itemId });
+  const eagleItem = Array.isArray(items)
+    ? items.find((item) => item?.id === itemId)
+    : null;
+
+  if (!eagleItem) {
+    throw new Error("The Eagle item could not be refreshed before saving.");
+  }
+
+  return eagleItem;
+}
+
+export async function saveFormatTags(eagleItem, projection, stereo) {
+  if (!eagleItem?.save) {
+    throw new TypeError("An Eagle item with a save method is required.");
+  }
+  if (!Array.isArray(eagleItem.tags)) {
+    throw new TypeError("Eagle item tags must be an array.");
+  }
+
+  const originalTags = [...eagleItem.tags];
+  eagleItem.tags = buildFormatTags(originalTags, projection, stereo);
+
+  try {
+    const saved = await eagleItem.save();
+    if (saved !== true) {
+      throw new Error("Eagle did not save the format tags.");
+    }
+  } catch (error) {
+    eagleItem.tags = originalTags;
+    throw error;
+  }
 }
