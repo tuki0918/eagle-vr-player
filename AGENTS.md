@@ -12,6 +12,7 @@ When implementing from a selected generated mock, treat that image as the source
 - Controls should begin fading away after approximately 0.5 seconds of inactivity during video playback and 1.5 seconds while paused, stopped, or viewing an image. They return immediately on pointer, touch, or keyboard activity.
 - Keep controls visible while the pointer is over the top bar, playback controls, or their popovers; restart the idle countdown after the pointer leaves.
 - View dragging must remain available while video playback is running.
+- Replacing the active media clears any in-progress view drag so the idle-control timer can resume.
 - The plugin display name is `VR Player`.
 - Focus mode keeps view dragging available, hides the main controls, and uses an unobtrusive lower-right exit control. Entering it clears focused controls so `F` remains a toggle.
 - Reset-view feedback appears only after an explicit reset and then fades out automatically.

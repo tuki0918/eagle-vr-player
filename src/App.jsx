@@ -223,6 +223,7 @@ function VrViewport({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return undefined;
+    dragStateRef.current(false);
     let disposed = false;
     let sourceVideo = null;
 
