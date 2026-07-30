@@ -38,3 +38,14 @@ export function isCurrentTagWriteRequest({
       isCurrentTagWriteConnection(activeConnection, expectedConnection),
   );
 }
+
+export function isLatestTagWriteRequest({
+  currentRequestSequence,
+  expectedRequestSequence,
+  ...request
+}) {
+  return (
+    currentRequestSequence === expectedRequestSequence &&
+    isCurrentTagWriteRequest(request)
+  );
+}

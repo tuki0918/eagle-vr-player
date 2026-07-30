@@ -5,6 +5,7 @@ import {
   canActivateTagWriteConnection,
   isCurrentTagWriteConnection,
   isCurrentTagWriteRequest,
+  isLatestTagWriteRequest,
 } from "../src/tagWriteConnection.js";
 
 const itemA = { id: "A" };
@@ -112,6 +113,34 @@ test("accepts a write only for the current connection and write session", () => 
       writeEnabled: true,
       currentWriteSession: 1,
       expectedWriteSession: 1,
+    }),
+    true,
+  );
+});
+
+test("updates completion status only for the latest write request", () => {
+  const connection = { item: itemA, generation: 1 };
+  const request = {
+    activeConnection: connection,
+    expectedConnection: connection,
+    blocked: false,
+    writeEnabled: true,
+    currentWriteSession: 1,
+    expectedWriteSession: 1,
+    currentRequestSequence: 2,
+  };
+
+  assert.equal(
+    isLatestTagWriteRequest({
+      ...request,
+      expectedRequestSequence: 1,
+    }),
+    false,
+  );
+  assert.equal(
+    isLatestTagWriteRequest({
+      ...request,
+      expectedRequestSequence: 2,
     }),
     true,
   );

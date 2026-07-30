@@ -22,6 +22,7 @@ import { loadDroppedEagleItem } from "./eagleDropLink.js";
 import { detectMediaType } from "./mediaType.js";
 import {
   canActivateTagWriteConnection,
+  isLatestTagWriteRequest,
   isCurrentTagWriteRequest,
 } from "./tagWriteConnection.js";
 
@@ -29,6 +30,7 @@ const DEMO_DURATION = 236;
 const PLAYING_IDLE_DELAY = 500;
 const PAUSED_IDLE_DELAY = 1500;
 const RECENTER_FEEDBACK_DURATION = 900;
+const CHECKING_DROP_TAG_STATUS = "Checking the current Eagle library…";
 const UNMATCHED_DROP_TAG_STATUS = "No matching Eagle item. Tags unavailable.";
 const WRITE_TAGS_SETTING_KEY = "eagle-vr-player.write-format-tags.v1";
 const IS_IMAGE_DEMO =
@@ -494,6 +496,7 @@ export function App() {
   const dropDepthRef = useRef(0);
   const droppedObjectUrlRef = useRef(null);
   const droppedFileRef = useRef(null);
+  const dropTagMatchPendingRef = useRef(false);
   const hasRequestedInitialEagleItemRef = useRef(false);
   const eagleApiRef = useRef(null);
   const eagleItemApiRef = useRef(null);
@@ -502,6 +505,7 @@ export function App() {
   const tagWriteConnectionSequenceRef = useRef(0);
   const tagWriteBlockedRef = useRef(true);
   const mediaLoadRequestRef = useRef(0);
+  const tagWriteRequestSequenceRef = useRef(0);
   const tagWriteQueueRef = useRef(Promise.resolve());
   const moreOptionsRef = useRef(null);
   const fileInfoRef = useRef(null);
@@ -556,6 +560,7 @@ export function App() {
 
   const releaseDroppedSource = useCallback(() => {
     droppedFileRef.current = null;
+    dropTagMatchPendingRef.current = false;
     if (!droppedObjectUrlRef.current) return;
     URL.revokeObjectURL(droppedObjectUrlRef.current);
     droppedObjectUrlRef.current = null;
@@ -688,6 +693,7 @@ export function App() {
 
   const connectDroppedFileToEagle = useCallback(
     async ({ eagleApi, expectedLibraryPath, file, nextMediaType, requestId }) => {
+      dropTagMatchPendingRef.current = true;
       try {
         const matchedItem = await loadDroppedEagleItem({
           eagleApi,
@@ -700,6 +706,7 @@ export function App() {
         ) {
           return;
         }
+        dropTagMatchPendingRef.current = false;
         if (!matchedItem) {
           setTagWriteStatus(UNMATCHED_DROP_TAG_STATUS);
           return;
@@ -723,6 +730,7 @@ export function App() {
         ) {
           return;
         }
+        dropTagMatchPendingRef.current = false;
         console.error("Failed to match the dropped file to an Eagle item", error);
         setTagWriteStatus(UNMATCHED_DROP_TAG_STATUS);
       }
@@ -764,14 +772,16 @@ export function App() {
       setIsPlaying(false);
       setRecenterSignal((value) => value + 1);
       const eagleApi = eagleApiRef.current;
+      const canCheckCurrentLibrary = Boolean(eagleApi?.item && eagleApi?.library);
+      dropTagMatchPendingRef.current = canCheckCurrentLibrary;
       setTagWriteStatus(
-        eagleApi?.item && eagleApi?.library
-          ? "Checking the current Eagle library…"
+        canCheckCurrentLibrary
+          ? CHECKING_DROP_TAG_STATUS
           : UNMATCHED_DROP_TAG_STATUS,
       );
       revealControls();
 
-      if (eagleApi?.item && eagleApi?.library) {
+      if (canCheckCurrentLibrary) {
         void connectDroppedFileToEagle({
           eagleApi,
           file,
@@ -840,7 +850,7 @@ export function App() {
           droppedObjectUrlRef.current &&
           typeof libraryPath === "string"
         ) {
-          setTagWriteStatus("Checking the current Eagle library…");
+          setTagWriteStatus(CHECKING_DROP_TAG_STATUS);
           void connectDroppedFileToEagle({
             eagleApi,
             expectedLibraryPath: libraryPath,
@@ -849,6 +859,7 @@ export function App() {
             requestId,
           });
         } else {
+          dropTagMatchPendingRef.current = false;
           setTagWriteStatus("The Eagle library changed. Reopen the player to load its selection.");
         }
         return;
@@ -862,7 +873,7 @@ export function App() {
         const droppedFile = droppedFileRef.current;
         const nextMediaType = detectMediaType(droppedFile);
         if (nextMediaType) {
-          setTagWriteStatus("Checking the current Eagle library…");
+          setTagWriteStatus(CHECKING_DROP_TAG_STATUS);
           void connectDroppedFileToEagle({
             eagleApi,
             file: droppedFile,
@@ -873,6 +884,7 @@ export function App() {
         return;
       }
 
+      dropTagMatchPendingRef.current = false;
       const requestId = mediaLoadRequestRef.current + 1;
       mediaLoadRequestRef.current = requestId;
 
@@ -981,6 +993,8 @@ export function App() {
 
       const expectedConnection = activeTagWriteConnectionRef.current;
       const expectedWriteSession = tagWriteSessionGenerationRef.current;
+      const expectedRequestSequence = tagWriteRequestSequenceRef.current + 1;
+      tagWriteRequestSequenceRef.current = expectedRequestSequence;
       const eagleItem = expectedConnection?.item;
       const eagleItemApi = eagleItemApiRef.current;
       if (!eagleItem?.id || !eagleItemApi?.get) {
@@ -1027,7 +1041,18 @@ export function App() {
             expectedWriteSession,
           })) {
             eagleItem.tags = [...freshEagleItem.tags];
-            setTagWriteStatus("Saved to Eagle.");
+            if (isLatestTagWriteRequest({
+              activeConnection: activeTagWriteConnectionRef.current,
+              expectedConnection,
+              blocked: tagWriteBlockedRef.current,
+              writeEnabled: writeTagsEnabledRef.current,
+              currentWriteSession: tagWriteSessionGenerationRef.current,
+              expectedWriteSession,
+              currentRequestSequence: tagWriteRequestSequenceRef.current,
+              expectedRequestSequence,
+            })) {
+              setTagWriteStatus("Saved to Eagle.");
+            }
           }
         })
         .catch((error) => {
@@ -1041,7 +1066,18 @@ export function App() {
           })) return;
 
           console.error("Failed to update Eagle format tags", error);
-          setTagWriteStatus("Format tags could not be saved.");
+          if (isLatestTagWriteRequest({
+            activeConnection: activeTagWriteConnectionRef.current,
+            expectedConnection,
+            blocked: tagWriteBlockedRef.current,
+            writeEnabled: writeTagsEnabledRef.current,
+            currentWriteSession: tagWriteSessionGenerationRef.current,
+            expectedWriteSession,
+            currentRequestSequence: tagWriteRequestSequenceRef.current,
+            expectedRequestSequence,
+          })) {
+            setTagWriteStatus("Format tags could not be saved.");
+          }
         });
     },
     [],
@@ -1489,7 +1525,9 @@ export function App() {
                         nextWriteTagsEnabled
                           ? tagWriteBlockedRef.current
                             ? droppedObjectUrlRef.current
-                              ? UNMATCHED_DROP_TAG_STATUS
+                              ? dropTagMatchPendingRef.current
+                                ? CHECKING_DROP_TAG_STATUS
+                                : UNMATCHED_DROP_TAG_STATUS
                               : "No Eagle item is available to update."
                             : "Syncing the current format…"
                           : "Writing is off.",
