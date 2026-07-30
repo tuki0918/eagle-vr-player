@@ -22,8 +22,9 @@ import { loadDroppedEagleItem } from "./eagleDropLink.js";
 import { detectMediaType } from "./mediaType.js";
 import {
   canActivateTagWriteConnection,
-  isLatestTagWriteRequest,
   isCurrentTagWriteRequest,
+  isCurrentTagWriteTarget,
+  isLatestTagWriteRequest,
 } from "./tagWriteConnection.js";
 
 const DEMO_DURATION = 236;
@@ -653,10 +654,16 @@ export function App() {
     pendingTagWriteConnectionRef.current = null;
   }, []);
 
-  const stageTagWriteConnection = useCallback((eagleItem, format) => {
+  const stageTagWriteConnection = useCallback((eagleItem, format, libraryPath) => {
     const generation = tagWriteConnectionSequenceRef.current + 1;
     tagWriteConnectionSequenceRef.current = generation;
-    const activeConnection = { item: eagleItem, generation };
+    const activeConnection = {
+      item: eagleItem,
+      generation,
+      libraryPath,
+      targetItemId: eagleItem?.id,
+      targetFilePath: eagleItem?.filePath,
+    };
 
     tagWriteBlockedRef.current = true;
     activeTagWriteConnectionRef.current = activeConnection;
@@ -694,6 +701,7 @@ export function App() {
   const connectDroppedFileToEagle = useCallback(
     async ({ eagleApi, expectedLibraryPath, file, nextMediaType, requestId }) => {
       dropTagMatchPendingRef.current = true;
+      const connectionLibraryPath = eagleApi?.library?.path;
       try {
         const matchedItem = await loadDroppedEagleItem({
           eagleApi,
@@ -707,13 +715,26 @@ export function App() {
           return;
         }
         dropTagMatchPendingRef.current = false;
+        if (
+          typeof connectionLibraryPath !== "string" ||
+          eagleApi?.library?.path !== connectionLibraryPath
+        ) {
+          setTagWriteStatus(
+            "The Eagle library changed. Reopen the player to load its selection.",
+          );
+          return;
+        }
         if (!matchedItem) {
           setTagWriteStatus(UNMATCHED_DROP_TAG_STATUS);
           return;
         }
 
         const matchedFormat = applyEagleItemFormat(matchedItem, nextMediaType);
-        stageTagWriteConnection(matchedItem, matchedFormat);
+        stageTagWriteConnection(
+          matchedItem,
+          matchedFormat,
+          connectionLibraryPath,
+        );
         setItem({
           name:
             matchedItem.name && matchedItem.ext
@@ -887,6 +908,7 @@ export function App() {
       dropTagMatchPendingRef.current = false;
       const requestId = mediaLoadRequestRef.current + 1;
       mediaLoadRequestRef.current = requestId;
+      const selectionLibraryPath = eagleApi?.library?.path;
 
       try {
         setSourceError("");
@@ -894,6 +916,16 @@ export function App() {
           ? await eagleApi.item.getSelected()
           : await eagleApi.item.get({ isSelected: true });
         if (!active || requestId !== mediaLoadRequestRef.current) return;
+        if (
+          typeof selectionLibraryPath !== "string" ||
+          eagleApi?.library?.path !== selectionLibraryPath
+        ) {
+          invalidateTagWriteConnection();
+          setTagWriteStatus(
+            "The Eagle library changed. Reopen the player to load its selection.",
+          );
+          return;
+        }
         const selectedItem = selected?.[0];
         if (!selectedItem) {
           setTagWriteStatus("No Eagle item is selected.");
@@ -907,7 +939,11 @@ export function App() {
           return;
         }
         const selectedFormat = applyEagleItemFormat(selectedItem, nextMediaType);
-        stageTagWriteConnection(selectedItem, selectedFormat);
+        stageTagWriteConnection(
+          selectedItem,
+          selectedFormat,
+          selectionLibraryPath,
+        );
         setItem({
           name: `${selectedItem.name}.${selectedItem.ext}`,
           width: selectedItem.width || 0,
@@ -997,6 +1033,23 @@ export function App() {
       tagWriteRequestSequenceRef.current = expectedRequestSequence;
       const eagleItem = expectedConnection?.item;
       const eagleItemApi = eagleItemApiRef.current;
+      const ensureCurrentTarget = (freshItem) => {
+        if (isCurrentTagWriteTarget({
+          connection: expectedConnection,
+          currentLibraryPath: eagleApiRef.current?.library?.path,
+          freshItem,
+        })) {
+          return true;
+        }
+
+        invalidateTagWriteConnection();
+        setTagWriteStatus(
+          "The Eagle library or item changed. Reopen the player to write tags.",
+        );
+        return false;
+      };
+
+      if (!ensureCurrentTarget()) return;
       if (!eagleItem?.id || !eagleItemApi?.get) {
         setTagWriteStatus(
           droppedObjectUrlRef.current
@@ -1020,6 +1073,7 @@ export function App() {
           })) {
             return;
           }
+          if (!ensureCurrentTarget()) return;
           const freshEagleItem = await loadFreshEagleItem(eagleItemApi, eagleItem.id);
           if (!isCurrentTagWriteRequest({
             activeConnection: activeTagWriteConnectionRef.current,
@@ -1031,6 +1085,7 @@ export function App() {
           })) {
             return;
           }
+          if (!ensureCurrentTarget(freshEagleItem)) return;
           await saveFormatTags(freshEagleItem, nextProjection, nextStereo);
           if (isCurrentTagWriteRequest({
             activeConnection: activeTagWriteConnectionRef.current,
@@ -1040,6 +1095,7 @@ export function App() {
             currentWriteSession: tagWriteSessionGenerationRef.current,
             expectedWriteSession,
           })) {
+            if (!ensureCurrentTarget(freshEagleItem)) return;
             eagleItem.tags = [...freshEagleItem.tags];
             if (isLatestTagWriteRequest({
               activeConnection: activeTagWriteConnectionRef.current,
@@ -1065,6 +1121,7 @@ export function App() {
             expectedWriteSession,
           })) return;
 
+          if (!ensureCurrentTarget()) return;
           console.error("Failed to update Eagle format tags", error);
           if (isLatestTagWriteRequest({
             activeConnection: activeTagWriteConnectionRef.current,
@@ -1080,7 +1137,7 @@ export function App() {
           }
         });
     },
-    [],
+    [invalidateTagWriteConnection],
   );
 
   useEffect(() => {
