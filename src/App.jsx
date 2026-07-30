@@ -754,6 +754,7 @@ export function App() {
       setMediaType(nextMediaType);
       dragPlaybackPendingRef.current = nextMediaType === "video";
       if (nextMediaType === "image") {
+        setIsLooping(false);
         setProjection("VR180");
         setStereo("Mono");
       }
@@ -906,6 +907,7 @@ export function App() {
         setIsPlaying(false);
         setDuration(0);
         dragPlaybackPendingRef.current = nextMediaType === "video";
+        if (nextMediaType === "image") setIsLooping(false);
         setMediaType(nextMediaType);
         setMediaSource(selectedItem.fileURL || `file://${selectedItem.filePath}`);
         setCurrentTime(0);
@@ -1187,6 +1189,9 @@ export function App() {
   const enterFocusMode = useCallback(() => {
     window.clearTimeout(idleTimerRef.current);
     controlsHoveredRef.current = false;
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setIsOptionsOpen(false);
     setIsFileInfoOpen(false);
     setControlsVisible(false);
