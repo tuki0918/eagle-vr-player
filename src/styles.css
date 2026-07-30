@@ -745,9 +745,17 @@ select:focus-visible {
   letter-spacing: -0.01em;
 }
 
-.drop-panel > span:last-child {
+.drop-formats {
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.drop-tag-note {
+  max-width: 430px;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .drop-icon {

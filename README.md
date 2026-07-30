@@ -72,6 +72,9 @@ vr:mode=Mono
 
 Enable **Write format tags** under **More options** to save the current Projection and Stereo layout to the selected Eagle item. When you turn it on, VR Player immediately updates only the item's `vr:projection=` and `vr:mode=` tags. If you later change either setting in the player, VR Player updates the corresponding tag again. All other tags, including other `vr:*` tags added by you or another tool, are left unchanged. This option is off by default.
 
+> [!NOTE]
+> Files opened by drag and drop are treated as local files, even when dragged from Eagle. They are not linked to an Eagle item, so VR Player cannot read or write its format tags. To use Eagle item tags, select the item in Eagle and then open VR Player.
+
 ## Local Preview
 
 Run the development server to preview the interface with the bundled coastal panorama:

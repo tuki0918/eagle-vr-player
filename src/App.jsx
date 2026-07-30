@@ -24,6 +24,7 @@ const DEMO_DURATION = 236;
 const PLAYING_IDLE_DELAY = 500;
 const PAUSED_IDLE_DELAY = 1500;
 const RECENTER_FEEDBACK_DURATION = 900;
+const DROPPED_FILE_TAG_NOTICE = "Eagle item tags aren't available for dropped files.";
 const WRITE_TAGS_SETTING_KEY = "eagle-vr-player.write-format-tags.v1";
 const IS_IMAGE_DEMO =
   import.meta.env.DEV && new URLSearchParams(window.location.search).get("media") === "image";
@@ -652,7 +653,7 @@ export function App() {
       setDuration(0);
       setIsPlaying(false);
       setRecenterSignal((value) => value + 1);
-      setTagWriteStatus("Dropped files are not linked to Eagle tags.");
+      setTagWriteStatus(DROPPED_FILE_TAG_NOTICE);
       revealControls();
     },
     [releaseDroppedSource, revealControls],
@@ -789,7 +790,11 @@ export function App() {
       const eagleItem = selectedEagleItemRef.current;
       const eagleItemApi = eagleItemApiRef.current;
       if (!eagleItem?.id || !eagleItemApi?.get) {
-        setTagWriteStatus("No Eagle item is available to update.");
+        setTagWriteStatus(
+          droppedObjectUrlRef.current
+            ? DROPPED_FILE_TAG_NOTICE
+            : "No Eagle item is available to update.",
+        );
         return;
       }
 
@@ -1103,7 +1108,8 @@ export function App() {
             <FileVideo size={29} weight="regular" />
           </span>
           <strong>Drop a video or image to load it</strong>
-          <span>MP4, MOV, JPG, PNG, WebP, and more</span>
+          <span className="drop-formats">MP4, MOV, JPG, PNG, WebP, and more</span>
+          <span className="drop-tag-note">{DROPPED_FILE_TAG_NOTICE}</span>
         </div>
       </div>
 
