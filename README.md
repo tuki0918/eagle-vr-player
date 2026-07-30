@@ -10,7 +10,7 @@ View VR180 and VR360 videos and images on your desktop without a headset. Load t
 - Side-by-side (SBS), top/bottom (TB), and monoscopic media layouts
 - Automatically loads the video or image currently selected in Eagle
 - Still-image preview defaulting to VR180 and Mono, with playback, seek, and volume controls disabled
-- Drag-and-drop support for opening another local video or image
+- Drag-and-drop support for opening another video or image, including format-tag loading for matching items in the current Eagle library
 - Starts video playback when the first view drag begins without resuming on later drags after a pause
 - Optional loop playback from the transport controls
 - View dragging during playback and mouse-wheel zoom
@@ -70,10 +70,10 @@ vr:mode=TB
 vr:mode=Mono
 ```
 
-Enable **Write format tags** under **More options** to save the current Projection and Stereo layout to the selected Eagle item. When you turn it on, VR Player immediately updates only the item's `vr:projection=` and `vr:mode=` tags. If you later change either setting in the player, VR Player updates the corresponding tag again. All other tags, including other `vr:*` tags added by you or another tool, are left unchanged. This option is off by default.
+Enable **Write format tags** under **More options** to save the current Projection and Stereo layout to the connected Eagle item. When you turn it on, VR Player immediately updates only the item's `vr:projection=` and `vr:mode=` tags. If you later change either setting in the player, VR Player updates the corresponding tag again. All other tags, including other `vr:*` tags added by you or another tool, are left unchanged. This option is off by default.
 
 > [!NOTE]
-> Files opened by drag and drop are treated as local files, even when dragged from Eagle. They are not linked to an Eagle item, so VR Player cannot read or write its format tags. To use Eagle item tags, select the item in Eagle and then open VR Player.
+> Files opened by drag and drop play as local files. If a dropped file's path exactly matches an item in the current Eagle library, VR Player connects that item and loads its format tags. Other dropped files remain unlinked, so their Eagle item tags cannot be read or written.
 
 ## Local Preview
 
