@@ -3,6 +3,7 @@ import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { Crosshair } from "@phosphor-icons/react/Crosshair";
 import { CubeTransparent } from "@phosphor-icons/react/CubeTransparent";
 import { DotsThree } from "@phosphor-icons/react/DotsThree";
+import { Eye } from "@phosphor-icons/react/Eye";
 import { FileVideo } from "@phosphor-icons/react/FileVideo";
 import { HandGrabbing } from "@phosphor-icons/react/HandGrabbing";
 import { Info } from "@phosphor-icons/react/Info";
@@ -36,6 +37,12 @@ import {
   SPATIAL_MAX_PITCH,
   SPATIAL_MAX_YAW,
 } from "./spatialPhoto.js";
+import {
+  getSpatialTouchWeight,
+  getTapJiggleStrength,
+  SPATIAL_TOUCH_RADIUS,
+  stepSpatialTouchSpring,
+} from "./spatialTouch.js";
 
 const DEMO_DURATION = 236;
 const PLAYING_IDLE_DELAY = 500;
@@ -150,9 +157,13 @@ function ShortcutTooltip({ id, label, shortcut }) {
   );
 }
 
-function FormatToggleGroup({ label, value, onChange, options, tabbable }) {
+function FormatToggleGroup({ className = "", label, value, onChange, options, tabbable }) {
   return (
-    <div className="format-toggle-group" role="radiogroup" aria-label={label}>
+    <div
+      className={`format-toggle-group${className ? ` ${className}` : ""}`}
+      role="radiogroup"
+      aria-label={label}
+    >
       {options.map((option, optionIndex) => {
         const isSelected = value === option.value;
         const OptionIcon = option.iconComponent;
@@ -206,6 +217,7 @@ function VrViewport({
   mediaSource,
   mediaType,
   imageView,
+  spatialTool,
   projection,
   stereo,
   recenterSignal,
@@ -224,6 +236,8 @@ function VrViewport({
   const pitchRef = useRef(0);
   const projectionRef = useRef(projection);
   const stereoRef = useRef(stereo);
+  const spatialToolRef = useRef(spatialTool);
+  const resetSpatialTouchRef = useRef(null);
   const interactionRef = useRef(onInteraction);
   const dragStateRef = useRef(onDragStateChange);
   const firstDragRef = useRef(onFirstDrag);
@@ -234,6 +248,7 @@ function VrViewport({
   useEffect(() => {
     projectionRef.current = projection;
     stereoRef.current = stereo;
+    spatialToolRef.current = spatialTool;
     interactionRef.current = onInteraction;
     dragStateRef.current = onDragStateChange;
     firstDragRef.current = onFirstDrag;
@@ -249,6 +264,7 @@ function VrViewport({
     onInteraction,
     onMediaError,
     projection,
+    spatialTool,
     stereo,
   ]);
 
@@ -263,6 +279,9 @@ function VrViewport({
     let backdrop = null;
     let backdropMaterial = null;
     let photoGroup = null;
+    let touchBasePositions = null;
+    let touchDepthField = null;
+    let touchDepthValues = null;
 
     const scene = new THREE.Scene();
     if (isSpatialPhoto) scene.background = new THREE.Color(0x05080c);
@@ -281,7 +300,9 @@ function VrViewport({
     renderer.domElement.setAttribute(
       "aria-label",
       isSpatialPhoto
-        ? "AI depth photo. Drag to explore the depth."
+        ? spatialToolRef.current === "touch"
+          ? "AI depth photo. Drag a point to pull it, or tap to jiggle it."
+          : "AI depth photo. Drag to explore the depth."
         : `${mediaType === "image" ? "VR image" : "VR video"}. Drag to look around.`,
     );
     renderer.domElement.setAttribute("role", "img");
@@ -290,6 +311,8 @@ function VrViewport({
     renderer.domElement.dataset.projection = projectionRef.current;
     renderer.domElement.dataset.geometryCoverage = projectionRef.current === "VR180" ? "180" : "360";
     renderer.domElement.dataset.depthStatus = isSpatialPhoto ? "loading" : "inactive";
+    renderer.domElement.dataset.spatialTool = isSpatialPhoto ? spatialToolRef.current : "inactive";
+    renderer.domElement.dataset.touchState = "idle";
     host.appendChild(renderer.domElement);
 
     const initialPhotoSize = getPhotoPlaneSize(16, 9);
@@ -308,7 +331,53 @@ function VrViewport({
       : new THREE.MeshBasicMaterial({ color: 0xffffff });
     const surface = new THREE.Mesh(geometry, material);
     surfaceRef.current = surface;
+    const touch = {
+      active: false,
+      center: new THREE.Vector2(),
+      depth: 128,
+      dirty: false,
+      lastClientX: 0,
+      lastClientY: 0,
+      lastMoveTime: 0,
+      offset: new THREE.Vector2(),
+      pointerId: null,
+      pointerTravel: 0,
+      rippleAge: Number.POSITIVE_INFINITY,
+      rippleStrength: 0,
+      velocity: new THREE.Vector2(),
+    };
+    const touchRaycaster = new THREE.Raycaster();
+    const touchPointer = new THREE.Vector2();
+    const reducedTouchMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    const restoreTouchGeometry = () => {
+      const position = surface.geometry.attributes.position;
+      if (!position || !touchBasePositions || position.array.length !== touchBasePositions.length) {
+        return;
+      }
+      position.array.set(touchBasePositions);
+      position.needsUpdate = true;
+      surface.geometry.computeBoundingSphere();
+      touch.dirty = false;
+    };
+
+    const resetSpatialTouch = () => {
+      touch.active = false;
+      touch.pointerId = null;
+      touch.offset.set(0, 0);
+      touch.velocity.set(0, 0);
+      touch.rippleAge = Number.POSITIVE_INFINITY;
+      touch.rippleStrength = 0;
+      restoreTouchGeometry();
+      renderer.domElement.classList.remove("is-touching", "is-dragging");
+      renderer.domElement.dataset.touchState = "idle";
+      renderer.domElement.dataset.touchOffset = "0.000,0.000";
+    };
+    resetSpatialTouchRef.current = resetSpatialTouch;
+
     if (isSpatialPhoto) {
+      geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+      touchBasePositions = new Float32Array(geometry.attributes.position.array);
       photoGroup = new THREE.Group();
       backdropMaterial = new THREE.MeshBasicMaterial({ color: 0x8f9499 });
       backdrop = new THREE.Mesh(
@@ -367,10 +436,33 @@ function VrViewport({
         segments.x,
         segments.y,
       );
+      surface.geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+      touchBasePositions = new Float32Array(surface.geometry.attributes.position.array);
+      touchDepthValues = null;
+      resetSpatialTouch();
       backdrop.geometry = new THREE.PlaneGeometry(photoSize.width, photoSize.height);
       previousSurfaceGeometry.dispose();
       previousBackdropGeometry.dispose();
       fitSpatialPhoto();
+    };
+
+    const sampleTouchDepth = (u, v) => {
+      if (!touchDepthField) return 128;
+      const x = Math.round(THREE.MathUtils.clamp(u, 0, 1) * (touchDepthField.width - 1));
+      const y = Math.round((1 - THREE.MathUtils.clamp(v, 0, 1)) * (touchDepthField.height - 1));
+      return touchDepthField.data[y * touchDepthField.width + x] ?? 128;
+    };
+
+    const rebuildTouchDepthValues = () => {
+      const uv = surface.geometry.attributes.uv;
+      if (!touchDepthField || !uv) {
+        touchDepthValues = null;
+        return;
+      }
+      touchDepthValues = new Uint8Array(uv.count);
+      for (let index = 0; index < uv.count; index += 1) {
+        touchDepthValues[index] = sampleTouchDepth(uv.getX(index), uv.getY(index));
+      }
     };
 
     const generateSpatialDepth = async (image, cacheKey) => {
@@ -408,6 +500,8 @@ function VrViewport({
         });
         if (disposed) return;
 
+        touchDepthField = depth;
+        rebuildTouchDepthValues();
         depthTexture = new THREE.DataTexture(
           depth.data,
           depth.width,
@@ -549,8 +643,89 @@ function VrViewport({
       fitSpatialPhoto();
     };
 
+    let previousRenderTime = performance.now();
+    const applySpatialTouchDeformation = (deltaSeconds) => {
+      if (!isSpatialPhoto || !touchBasePositions) return;
+
+      if (!touch.active) {
+        const nextSpring = stepSpatialTouchSpring(
+          {
+            offsetX: touch.offset.x,
+            offsetY: touch.offset.y,
+            velocityX: touch.velocity.x,
+            velocityY: touch.velocity.y,
+          },
+          deltaSeconds,
+          reducedTouchMotion ? { damping: 18, stiffness: 82 } : undefined,
+        );
+        touch.offset.set(nextSpring.offsetX, nextSpring.offsetY);
+        touch.velocity.set(nextSpring.velocityX, nextSpring.velocityY);
+        touch.rippleAge += deltaSeconds;
+      }
+
+      const rippleIsVisible = touch.rippleAge < (reducedTouchMotion ? 0.32 : 1.45);
+      const springIsMoving =
+        touch.offset.lengthSq() > 0.0000025 || touch.velocity.lengthSq() > 0.0008;
+      if (!touch.active && !rippleIsVisible && !springIsMoving) {
+        touch.offset.set(0, 0);
+        touch.velocity.set(0, 0);
+        if (touch.dirty) restoreTouchGeometry();
+        renderer.domElement.dataset.touchState = "idle";
+        renderer.domElement.dataset.touchOffset = "0.000,0.000";
+        return;
+      }
+
+      const position = surface.geometry.attributes.position;
+      if (!position || position.array.length !== touchBasePositions.length) return;
+      const radius = SPATIAL_TOUCH_RADIUS;
+      const rippleEnvelope = rippleIsVisible
+        ? Math.exp(-touch.rippleAge * (reducedTouchMotion ? 10 : 3.8))
+        : 0;
+
+      for (let index = 0; index < position.count; index += 1) {
+        const positionIndex = index * 3;
+        const baseX = touchBasePositions[positionIndex];
+        const baseY = touchBasePositions[positionIndex + 1];
+        const baseZ = touchBasePositions[positionIndex + 2];
+        const deltaX = baseX - touch.center.x;
+        const deltaY = baseY - touch.center.y;
+        const distance = Math.hypot(deltaX, deltaY);
+        const depthDifference = touchDepthValues
+          ? Math.abs(touchDepthValues[index] - touch.depth)
+          : 0;
+        const weight = getSpatialTouchWeight(distance, radius, depthDifference);
+
+        if (weight <= 0.0001) {
+          position.setXYZ(index, baseX, baseY, baseZ);
+          continue;
+        }
+
+        const normalizedDistance = distance / radius;
+        const ripple = rippleEnvelope
+          * touch.rippleStrength
+          * Math.sin(touch.rippleAge * 19 - normalizedDistance * 4.6);
+        const radialX = distance > 0.0001 ? deltaX / distance : 0;
+        const radialY = distance > 0.0001 ? deltaY / distance : 0;
+        position.setXYZ(
+          index,
+          baseX + touch.offset.x * weight + radialX * ripple * weight * 0.04,
+          baseY + touch.offset.y * weight + (0.055 + radialY * 0.018) * ripple * weight,
+          baseZ + ripple * weight * 0.07,
+        );
+      }
+
+      position.needsUpdate = true;
+      touch.dirty = true;
+      renderer.domElement.dataset.touchOffset =
+        `${touch.offset.x.toFixed(3)},${touch.offset.y.toFixed(3)}`;
+    };
+
     const render = () => {
+      const renderTime = performance.now();
+      const deltaSeconds = Math.min((renderTime - previousRenderTime) / 1000, 1 / 30);
+      previousRenderTime = renderTime;
       if (isSpatialPhoto) {
+        applySpatialTouchDeformation(deltaSeconds);
         const spatialPosition = getSpatialCameraPosition(yawRef.current, pitchRef.current);
         camera.position.x = THREE.MathUtils.lerp(camera.position.x, spatialPosition.x, 0.14);
         camera.position.y = THREE.MathUtils.lerp(camera.position.y, spatialPosition.y, 0.14);
@@ -575,8 +750,107 @@ function VrViewport({
     renderer.setAnimationLoop(render);
 
     const drag = { active: false, x: 0, y: 0 };
+    const getSpatialTouchHit = (event) => {
+      const bounds = renderer.domElement.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return null;
+      touchPointer.set(
+        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+        -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
+      );
+      scene.updateMatrixWorld(true);
+      touchRaycaster.setFromCamera(touchPointer, camera);
+      return touchRaycaster.intersectObject(surface, false)[0] || null;
+    };
+
+    const beginSpatialTouch = (event) => {
+      const hit = getSpatialTouchHit(event);
+      if (!hit) return false;
+      const localPoint = surface.worldToLocal(hit.point.clone());
+      touch.active = true;
+      touch.pointerId = event.pointerId;
+      touch.center.set(localPoint.x, localPoint.y);
+      touch.depth = hit.uv ? sampleTouchDepth(hit.uv.x, hit.uv.y) : 128;
+      touch.offset.set(0, 0);
+      touch.velocity.set(0, 0);
+      touch.pointerTravel = 0;
+      touch.lastClientX = event.clientX;
+      touch.lastClientY = event.clientY;
+      touch.lastMoveTime = performance.now();
+      touch.rippleAge = Number.POSITIVE_INFINITY;
+      touch.rippleStrength = 0;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      renderer.domElement.classList.add("is-touching", "is-dragging");
+      renderer.domElement.dataset.touchState = "pulling";
+      renderer.domElement.dataset.touchCenter =
+        `${touch.center.x.toFixed(3)},${touch.center.y.toFixed(3)}`;
+      renderer.domElement.dataset.touchDepth = String(touch.depth);
+      dragStateRef.current(true);
+      firstDragRef.current();
+      interactionRef.current();
+      return true;
+    };
+
+    const moveSpatialTouch = (event) => {
+      const hit = getSpatialTouchHit(event);
+      if (!hit) return;
+      const now = performance.now();
+      const localPoint = surface.worldToLocal(hit.point.clone());
+      const nextOffset = new THREE.Vector2(
+        THREE.MathUtils.clamp(localPoint.x - touch.center.x, -0.34, 0.34),
+        THREE.MathUtils.clamp(localPoint.y - touch.center.y, -0.28, 0.28),
+      );
+      const deltaSeconds = Math.max((now - touch.lastMoveTime) / 1000, 1 / 120);
+      touch.velocity
+        .set(
+          (nextOffset.x - touch.offset.x) / deltaSeconds,
+          (nextOffset.y - touch.offset.y) / deltaSeconds,
+        )
+        .clampLength(0, 2.2);
+      touch.offset.copy(nextOffset);
+      touch.pointerTravel += Math.hypot(
+        event.clientX - touch.lastClientX,
+        event.clientY - touch.lastClientY,
+      );
+      touch.lastClientX = event.clientX;
+      touch.lastClientY = event.clientY;
+      touch.lastMoveTime = now;
+      interactionRef.current();
+    };
+
+    const endSpatialTouch = (event, cancelled = false) => {
+      touch.active = false;
+      touch.pointerId = null;
+      renderer.domElement.releasePointerCapture?.(event.pointerId);
+      renderer.domElement.classList.remove("is-touching", "is-dragging");
+      dragStateRef.current(false);
+
+      if (cancelled) {
+        resetSpatialTouch();
+      } else {
+        touch.rippleAge = 0;
+        touch.rippleStrength = reducedTouchMotion
+          ? 0.22
+          : getTapJiggleStrength(touch.pointerTravel);
+        if (touch.pointerTravel < 9) {
+          touch.offset.set(0, 0);
+          touch.velocity.set(0, reducedTouchMotion ? 0.16 : 0.78);
+        } else {
+          touch.velocity.multiplyScalar(reducedTouchMotion ? 0.08 : 0.32).clampLength(0, 1.25);
+        }
+        renderer.domElement.dataset.touchState = "settling";
+      }
+      interactionRef.current();
+    };
+
     const pointerDown = (event) => {
       if (event.button !== 0) return;
+      if (
+        isSpatialPhoto &&
+        spatialToolRef.current === "touch" &&
+        beginSpatialTouch(event)
+      ) {
+        return;
+      }
       drag.active = true;
       drag.x = event.clientX;
       drag.y = event.clientY;
@@ -587,6 +861,10 @@ function VrViewport({
       interactionRef.current();
     };
     const pointerMove = (event) => {
+      if (touch.active && event.pointerId === touch.pointerId) {
+        moveSpatialTouch(event);
+        return;
+      }
       if (!drag.active) return;
       const sensitivity = isSpatialPhoto ? 0.04 : 0.115 * (camera.fov / 76);
       const nextYaw = yawRef.current + (event.clientX - drag.x) * sensitivity;
@@ -606,6 +884,10 @@ function VrViewport({
       drag.y = event.clientY;
     };
     const pointerUp = (event) => {
+      if (touch.active && event.pointerId === touch.pointerId) {
+        endSpatialTouch(event, event.type === "pointercancel");
+        return;
+      }
       if (!drag.active) return;
       drag.active = false;
       renderer.domElement.releasePointerCapture?.(event.pointerId);
@@ -633,6 +915,9 @@ function VrViewport({
 
     return () => {
       disposed = true;
+      if (resetSpatialTouchRef.current === resetSpatialTouch) {
+        resetSpatialTouchRef.current = null;
+      }
       sourceVideo?.removeEventListener("loadeddata", attachVideoTexture);
       observer.disconnect();
       renderer.setAnimationLoop(null);
@@ -654,8 +939,26 @@ function VrViewport({
   }, [imageView, mediaSource, mediaType, videoRef]);
 
   useEffect(() => {
+    spatialToolRef.current = spatialTool;
+    const canvas = hostRef.current?.querySelector("canvas");
+    if (!canvas || mediaType !== "image" || imageView !== "spatial") return;
+    canvas.dataset.spatialTool = spatialTool;
+    canvas.setAttribute(
+      "aria-label",
+      spatialTool === "touch"
+        ? "AI depth photo. Drag a point to pull it, or tap to jiggle it."
+        : "AI depth photo. Drag to explore the depth.",
+    );
+    if (spatialTool !== "touch") {
+      resetSpatialTouchRef.current?.();
+      dragStateRef.current(false);
+    }
+  }, [imageView, mediaType, spatialTool]);
+
+  useEffect(() => {
     yawRef.current = 0;
     pitchRef.current = 0;
+    resetSpatialTouchRef.current?.();
     const canvas = hostRef.current?.querySelector("canvas");
     if (canvas) {
       canvas.dataset.yaw = "0.00";
@@ -756,6 +1059,7 @@ export function App() {
   );
   const [mediaType, setMediaType] = useState(IS_IMAGE_DEMO ? "image" : "video");
   const [imageView, setImageView] = useState(IS_SPATIAL_DEMO ? "spatial" : "immersive");
+  const [spatialTool, setSpatialTool] = useState("touch");
   const [depthStatus, setDepthStatus] = useState({ status: "inactive" });
   const [sourceError, setSourceError] = useState("");
   const [projection, setProjection] = useState("VR180");
@@ -1426,6 +1730,7 @@ export function App() {
         return;
       }
       setImageView(nextImageView);
+      if (nextImageView === "spatial") setSpatialTool("touch");
       setDepthStatus(
         nextImageView === "spatial"
           ? {
@@ -1438,6 +1743,17 @@ export function App() {
       setHasDragged(false);
       setShowRecenterFeedback(false);
       setRecenterSignal((value) => value + 1);
+      revealControls();
+    },
+    [imageView, mediaType, revealControls],
+  );
+
+  const changeSpatialTool = useCallback(
+    (nextTool) => {
+      if (mediaType !== "image" || imageView !== "spatial") return;
+      setSpatialTool(nextTool);
+      setHasDragged(false);
+      setShowRecenterFeedback(false);
       revealControls();
     },
     [imageView, mediaType, revealControls],
@@ -1615,13 +1931,20 @@ export function App() {
       } else if (event.key.toLowerCase() === "l" && !playbackDisabled) {
         event.preventDefault();
         toggleLooping();
+      } else if (
+        event.key.toLowerCase() === "t" &&
+        mediaType === "image" &&
+        imageView === "spatial"
+      ) {
+        event.preventDefault();
+        changeSpatialTool(spatialTool === "touch" ? "look" : "touch");
       } else if (event.key.toLowerCase() === "r") recenter();
       else if (event.key === "ArrowRight" && !playbackDisabled) seek(Math.min(duration, currentTime + 5));
       else if (event.key === "ArrowLeft" && !playbackDisabled) seek(Math.max(0, currentTime - 5));
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentTime, duration, enterFocusMode, exitFocusMode, focusMode, isFileInfoOpen, isOptionsOpen, playbackDisabled, recenter, revealControls, toggleLooping, toggleMute, togglePlayback]);
+  }, [changeSpatialTool, currentTime, duration, enterFocusMode, exitFocusMode, focusMode, imageView, isFileInfoOpen, isOptionsOpen, mediaType, playbackDisabled, recenter, revealControls, spatialTool, toggleLooping, toggleMute, togglePlayback]);
 
   const displayedFormatTags = buildFormatTags([], projection, stereo);
 
@@ -1646,6 +1969,7 @@ export function App() {
       data-projection={projection}
       data-stereo={stereo}
       data-image-view={imageView}
+      data-spatial-tool={imageView === "spatial" ? spatialTool : "inactive"}
       data-depth-status={depthStatus.status}
       data-drop-active={isDropActive ? "true" : "false"}
       data-media-type={mediaType}
@@ -1685,6 +2009,7 @@ export function App() {
         mediaSource={mediaSource}
         mediaType={mediaType}
         imageView={imageView}
+        spatialTool={spatialTool}
         projection={projection}
         stereo={stereo}
         recenterSignal={recenterSignal}
@@ -1800,7 +2125,30 @@ export function App() {
                   },
                 ]}
               />
-              {imageView === "immersive" ? <span className="control-divider" /> : null}
+              <span className="control-divider" />
+              {imageView === "spatial" ? (
+                <FormatToggleGroup
+                  className="spatial-tool-toggle"
+                  label="3D Photo interaction"
+                  value={spatialTool}
+                  onChange={changeSpatialTool}
+                  tabbable={controlsVisible}
+                  options={[
+                    {
+                      value: "look",
+                      label: "Look",
+                      iconComponent: Eye,
+                      ariaLabel: "Look around 3D photo",
+                    },
+                    {
+                      value: "touch",
+                      label: "Touch",
+                      iconComponent: HandGrabbing,
+                      ariaLabel: "Pull and jiggle 3D photo",
+                    },
+                  ]}
+                />
+              ) : null}
             </>
           ) : null}
           {mediaType !== "image" || imageView === "immersive" ? (
@@ -1925,6 +2273,7 @@ export function App() {
                       <div><dt>Mute / Unmute</dt><dd><kbd>M</kbd></dd></div>
                       <div><dt>Loop playback</dt><dd><kbd>L</kbd></dd></div>
                       <div><dt>Reset view</dt><dd><kbd>R</kbd></dd></div>
+                      <div><dt>Look / Touch</dt><dd><kbd>T</kbd></dd></div>
                       <div><dt>Focus mode</dt><dd><kbd>F</kbd></dd></div>
                       <div><dt>Exit focus</dt><dd><kbd>Esc</kbd></dd></div>
                       <div><dt>Seek −5 seconds</dt><dd><kbd>←</kbd></dd></div>
@@ -1955,7 +2304,13 @@ export function App() {
       {!hasDragged ? (
         <div className="drag-hint" aria-hidden="true">
           <HandGrabbing size={34} weight="light" />
-          <span>{imageView === "spatial" ? "Drag to explore depth" : "Drag to look around"}</span>
+          <span>
+            {imageView === "spatial"
+              ? spatialTool === "touch"
+                ? "Drag to pull · Tap to jiggle"
+                : "Drag to explore depth"
+              : "Drag to look around"}
+          </span>
         </div>
       ) : null}
 

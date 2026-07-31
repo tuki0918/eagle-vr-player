@@ -99,6 +99,14 @@ button {
   cursor: grabbing;
 }
 
+.vr-canvas[data-spatial-tool="touch"] {
+  cursor: grab;
+}
+
+.vr-canvas[data-spatial-tool="touch"].is-touching {
+  cursor: grabbing;
+}
+
 .control-surface {
   transition: opacity 260ms ease, transform 260ms ease;
 }
@@ -255,6 +263,10 @@ button {
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+.spatial-tool-toggle .format-toggle-button {
+  padding-inline: 9px;
 }
 
 .format-toggle-button {
@@ -1087,6 +1099,15 @@ select:focus-visible {
 
   .format-controls.has-image-view .format-toggle-button {
     padding-inline: 8px;
+  }
+
+  .spatial-tool-toggle .format-toggle-button span {
+    display: none;
+  }
+
+  .spatial-tool-toggle .format-toggle-button {
+    width: 40px;
+    padding: 0;
   }
 
   .transport {

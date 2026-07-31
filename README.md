@@ -7,7 +7,7 @@ View VR180 and VR360 videos and images on your desktop without a headset. Load t
 ## Features
 
 - VR180 and VR360 video and image preview
-- Optional AI-powered 3D Photo view for ordinary still images
+- Optional AI-powered 3D Photo view with touch deformation for ordinary still images
 - Side-by-side (SBS), top/bottom (TB), and Mono layouts
 - Opens the selected Eagle item or a dropped video or image
 - Reads VR format tags and optionally writes them to connected Eagle items
@@ -20,8 +20,11 @@ View VR180 and VR360 videos and images on your desktop without a headset. Load t
 ## 3D Photo Preview
 
 When a still image is open, choose **3D Photo** to estimate a depth map and add
-restrained parallax while dragging. The original file is not modified, and this
-view does not change the item's VR projection or stereo tags.
+noticeable parallax. Use **Look** to move the viewpoint, or **Touch** to pull a
+local part of the image and release it with an elastic wobble. A tap produces a
+short jiggle. Depth similarity keeps the deformation concentrated around the
+touched subject where possible. The original file is not modified, and this view
+does not change the item's VR projection or stereo tags.
 
 Depth Anything V2 runs locally through Transformers.js. The model is downloaded
 and cached on first use; later conversions reuse that model and recent depth
@@ -52,6 +55,8 @@ The build automatically includes `manifest.json` and the distributable `logo.png
 | Action | Control |
 | --- | --- |
 | Look around | Drag the video |
+| Switch 3D Photo Look / Touch | `T` |
+| Pull / jiggle a 3D Photo | Drag or tap in **Touch** mode |
 | Zoom | Mouse wheel |
 | Play / Pause | `Space` |
 | Mute / Unmute | `M` |
