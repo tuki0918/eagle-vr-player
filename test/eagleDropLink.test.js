@@ -367,6 +367,58 @@ test("prefers Electron webUtils over the legacy File.path property", () => {
   assert.equal(getNativeDroppedPath(file, requireFn), itemPath);
 });
 
+test("does not fall back to File.path when webUtils returns no native path", () => {
+  const file = {
+    name: "synthetic.mp4",
+    path: itemPath,
+  };
+  const requireFn = (specifier) => {
+    assert.equal(specifier, "electron");
+    return {
+      webUtils: {
+        getPathForFile(candidate) {
+          assert.equal(candidate, file);
+          return "";
+        },
+      },
+    };
+  };
+
+  assert.equal(getNativeDroppedPath(file, requireFn), null);
+});
+
+test("does not fall back to File.path when webUtils rejects a file", () => {
+  const file = {
+    name: "synthetic.mp4",
+    path: itemPath,
+  };
+  const requireFn = (specifier) => {
+    assert.equal(specifier, "electron");
+    return {
+      webUtils: {
+        getPathForFile() {
+          throw new TypeError("Not a native File");
+        },
+      },
+    };
+  };
+
+  assert.equal(getNativeDroppedPath(file, requireFn), null);
+});
+
+test("uses legacy File.path only when webUtils is unavailable", () => {
+  const file = {
+    name: "panorama.mp4",
+    path: itemPath,
+  };
+  const requireFn = (specifier) => {
+    assert.equal(specifier, "electron");
+    return {};
+  };
+
+  assert.equal(getNativeDroppedPath(file, requireFn), itemPath);
+});
+
 test("matches Windows library paths case-insensitively after exact item verification", async () => {
   const windowsLibraryPath = "C:\\Users\\Test\\VR.library";
   const droppedPath =
@@ -408,6 +460,25 @@ test("rejects Windows item paths that differ only by case", async () => {
     }),
     selectedItems: [],
     pathApi: path.win32,
+  });
+
+  assert.equal(result, null);
+});
+
+test("rejects normalized-equivalent item paths containing parent segments", async () => {
+  const nonLiteralPath =
+    `${libraryPath}/images/unused/../ABC123.info/panorama.mp4`;
+  const item = {
+    id: "ABC123",
+    filePath: itemPath,
+    isDeleted: false,
+  };
+
+  const result = await loadDroppedEagleItem({
+    file: { path: nonLiteralPath },
+    eagleApi: createEagle({ items: [item] }),
+    selectedItems: [],
+    pathApi: path.posix,
   });
 
   assert.equal(result, null);

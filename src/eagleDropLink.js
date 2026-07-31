@@ -28,14 +28,15 @@ export function getNativeDroppedPath(file, requireFn) {
   if (typeof getPathForFile === "function") {
     try {
       const filePath = getPathForFile.call(electron.webUtils, file);
-      if (typeof filePath === "string" && filePath.length > 0) {
-        return filePath;
-      }
+      return typeof filePath === "string" && filePath.length > 0
+        ? filePath
+        : null;
     } catch {
-      // Fall through to Eagle 4's legacy File.path support.
+      return null;
     }
   }
 
+  // Eagle versions without Electron webUtils still expose the legacy path.
   try {
     if (typeof file.path === "string" && file.path.length > 0) {
       return file.path;
@@ -82,10 +83,8 @@ function pathsMatch(left, right, pathApi) {
     : normalizedLeft === normalizedRight;
 }
 
-function pathsMatchExactly(left, right, pathApi) {
-  const normalizedLeft = normalizePath(left, pathApi);
-  const normalizedRight = normalizePath(right, pathApi);
-  return normalizedLeft !== null && normalizedLeft === normalizedRight;
+function pathsMatchExactly(left, right) {
+  return typeof left === "string" && left.length > 0 && left === right;
 }
 
 function segmentMatches(left, right, pathApi) {
@@ -215,7 +214,7 @@ export async function loadDroppedEagleItem({
   const currentLibraryPath = eagleApi?.library?.path;
   if (
     !pathsMatch(currentLibraryPath, libraryPath, nativePath) ||
-    !pathsMatchExactly(refreshedItem.filePath, droppedPath, nativePath)
+    !pathsMatchExactly(refreshedItem.filePath, droppedPath)
   ) {
     return null;
   }
