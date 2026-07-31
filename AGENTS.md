@@ -12,8 +12,9 @@ When implementing from a selected generated mock, treat that image as the source
 - Controls should begin fading away after approximately 0.5 seconds of inactivity during video playback and 1.5 seconds while paused, stopped, or viewing an image. They return immediately on pointer, touch, or keyboard activity.
 - Keep controls visible while the pointer is over the top bar, playback controls, or their popovers; restart the idle countdown after the pointer leaves.
 - View dragging must remain available while video playback is running.
+- Replacing the active media clears any in-progress view drag so the idle-control timer can resume.
 - The plugin display name is `VR Player`.
-- Focus mode keeps view dragging available, hides the main controls, and uses an unobtrusive lower-right exit control.
+- Focus mode keeps view dragging available, hides the main controls, and uses an unobtrusive lower-right exit control. Entering it clears focused controls so `F` remains a toggle.
 - Reset-view feedback appears only after an explicit reset and then fades out automatically.
 - More options contains tag settings and a keyboard shortcut reference that is collapsed by default. When expanded, the shortcut list uses a fixed-height 174px scroll area. More options dismisses on outside click or `Esc`.
 - Keep tooltips on Reset view, Loop playback, and Focus mode; Play / Pause, Mute / Unmute, and Exit Focus do not use tooltips.
@@ -21,9 +22,10 @@ When implementing from a selected generated mock, treat that image as the source
 - Keep the editable 1024 × 1024 icon master as `logo-source.png`. The distributable `logo.png` and `dist/logo.png` must be 128 × 128 pixels for Eagle.
 - VR still images are previewable alongside videos. Images default to VR180 and Mono when format tags are absent. While an image is open, playback, timeline seeking, and volume controls remain visible but disabled, with no time or `Still image` label.
 - In video mode, beginning the first view drag starts playback. This drag-to-play behavior is available only at initial load; after playback is manually controlled or paused, later view drags must not resume it.
-- Loop playback is toggled from a transport button positioned immediately to the left of volume or with `L`. It defaults to off and is disabled for still images. The icon shows the current state: repeat-off while disabled and the regular repeat icon while enabled, without using an active accent color. Mute / Unmute uses `M`.
+- Loop playback is toggled from a transport button positioned immediately to the left of volume or with `L`. It defaults to off, resets to off when a still image opens, and is disabled for still images. The icon shows the current state: repeat-off while disabled and the regular repeat icon while enabled, without using an active accent color. Mute / Unmute uses `M`.
 - Disable Tab and Shift+Tab focus traversal in the player. Pressing Tab clears any focused control so global keyboard shortcuts remain available.
 - Keep media details out of More options. Show an info icon immediately beside the filename; its popover contains format, resolution, duration for video, and file size.
 - Center the `Drag to look around` hint both horizontally and vertically within the VR canvas at every viewport size.
-- Format-tag writing manages only `vr:projection=` and `vr:mode=`. Re-fetch the item by ID immediately before each save, preserve every other current tag including other `vr:*` tags, fail without writing if tags are not an array, and restore the item's original tag array when saving fails.
-- Files opened by drag and drop remain unlinked from Eagle items, even when dragged from Eagle. Document that limitation in the README and mention it unobtrusively inside the active drop area.
+- Format-tag writing manages only `vr:projection=` and `vr:mode=`. Bind each writable connection to the current library path, item ID, and exact file path; fail closed if any of them changes before saving. Re-fetch the item by ID immediately before each save, preserve every other current tag including other `vr:*` tags, fail without writing if tags are not an array, and restore the item's original tag array when saving fails. Turning writing off invalidates queued requests so they cannot proceed to save after an outstanding item refresh completes.
+- Files opened by drag and drop continue playing from a local object URL. Connect a dropped file to an Eagle item only when its native path is inside the current library and the Eagle API confirms an exact `item.filePath` match. Never scan the full library or match by filename alone; discard stale asynchronous matches and disconnect on library changes. Explain the conditional tag support in the README, but do not show tag guidance in the active drop area.
+- Matching Eagle items load their format tags silently. Use `No matching Eagle item. Tags unavailable.` only as a relevant status inside Tag settings when a dropped file remains unlinked.

@@ -4,9 +4,9 @@ const listeners = new Set();
 let pluginCreated = false;
 let pluginContext = null;
 
-function notifyListeners(event) {
+function notifyListeners(event, details = {}) {
   for (const listener of listeners) {
-    listener({ eagle: eagleApi, event, plugin: pluginContext });
+    listener({ eagle: eagleApi, event, plugin: pluginContext, ...details });
   }
 }
 
@@ -19,6 +19,10 @@ if (eagleApi?.onPluginCreate) {
 
   eagleApi.onPluginRun?.(() => {
     if (pluginCreated) notifyListeners("run");
+  });
+
+  eagleApi.onLibraryChanged?.((libraryPath) => {
+    if (pluginCreated) notifyListeners("library-changed", { libraryPath });
   });
 }
 

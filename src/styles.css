@@ -46,18 +46,6 @@ button {
   border: 0;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 .player-shell {
   position: relative;
   width: 100%;
@@ -748,14 +736,6 @@ select:focus-visible {
 .drop-formats {
   color: var(--text-muted);
   font-size: 14px;
-}
-
-.drop-tag-note {
-  max-width: 430px;
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.4;
 }
 
 .drop-icon {
