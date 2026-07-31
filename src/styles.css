@@ -247,6 +247,10 @@ button {
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
 }
 
+.format-controls.has-image-view {
+  transition: width 180ms ease;
+}
+
 .format-toggle-group {
   display: flex;
   align-items: center;
@@ -1012,6 +1016,64 @@ select:focus-visible {
   backdrop-filter: blur(14px);
 }
 
+.depth-status {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 96px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  max-width: min(420px, calc(100% - 48px));
+  padding: 8px 12px;
+  overflow: hidden;
+  border: 1px solid rgba(116, 174, 255, 0.24);
+  border-radius: 11px;
+  background: rgba(7, 12, 18, 0.86);
+  color: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.35;
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+
+.depth-status-error {
+  border-color: rgba(255, 185, 98, 0.32);
+  color: rgba(255, 226, 188, 0.9);
+}
+
+.depth-spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #76adff;
+  border-radius: 50%;
+  animation: depth-spinner-rotate 850ms linear infinite;
+}
+
+.depth-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    #438dff 0%,
+    #7b61ff var(--depth-progress),
+    rgba(255, 255, 255, 0.08) var(--depth-progress),
+    rgba(255, 255, 255, 0.08) 100%
+  );
+}
+
+@keyframes depth-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 980px) {
   .top-bar {
     grid-template-columns: minmax(0, 1fr) auto auto;
@@ -1021,6 +1083,10 @@ select:focus-visible {
 
   .file-meta strong {
     font-size: 18px;
+  }
+
+  .format-controls.has-image-view .format-toggle-button {
+    padding-inline: 8px;
   }
 
   .transport {
@@ -1046,5 +1112,9 @@ select:focus-visible {
   .recenter-feedback,
   .focus-exit-button {
     transition-duration: 0.01ms;
+  }
+
+  .depth-spinner {
+    animation-duration: 1.8s;
   }
 }

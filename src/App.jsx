@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { Crosshair } from "@phosphor-icons/react/Crosshair";
+import { CubeTransparent } from "@phosphor-icons/react/CubeTransparent";
 import { DotsThree } from "@phosphor-icons/react/DotsThree";
 import { FileVideo } from "@phosphor-icons/react/FileVideo";
 import { HandGrabbing } from "@phosphor-icons/react/HandGrabbing";
@@ -27,6 +28,14 @@ import {
   isCurrentTagWriteTarget,
   isLatestTagWriteRequest,
 } from "./tagWriteConnection.js";
+import { estimateImageDepth } from "./depthEstimator.js";
+import {
+  getPhotoGeometrySegments,
+  getPhotoPlaneSize,
+  getSpatialCameraPosition,
+  SPATIAL_MAX_PITCH,
+  SPATIAL_MAX_YAW,
+} from "./spatialPhoto.js";
 
 const DEMO_DURATION = 236;
 const PLAYING_IDLE_DELAY = 500;
@@ -35,8 +44,11 @@ const RECENTER_FEEDBACK_DURATION = 900;
 const CHECKING_DROP_TAG_STATUS = "Checking the current Eagle library…";
 const UNMATCHED_DROP_TAG_STATUS = "No matching Eagle item. Tags unavailable.";
 const WRITE_TAGS_SETTING_KEY = "eagle-vr-player.write-format-tags.v1";
+const SPATIAL_FRAMING_HEIGHT = 2.4;
 const IS_IMAGE_DEMO =
   import.meta.env.DEV && new URLSearchParams(window.location.search).get("media") === "image";
+const IS_SPATIAL_DEMO =
+  IS_IMAGE_DEMO && new URLSearchParams(window.location.search).get("view") === "spatial";
 
 function getInitialWriteTagsSetting() {
   try {
@@ -143,6 +155,7 @@ function FormatToggleGroup({ label, value, onChange, options, tabbable }) {
     <div className="format-toggle-group" role="radiogroup" aria-label={label}>
       {options.map((option, optionIndex) => {
         const isSelected = value === option.value;
+        const OptionIcon = option.iconComponent;
         return (
           <button
             className={`format-toggle-button${isSelected ? " is-selected" : ""}`}
@@ -175,7 +188,11 @@ function FormatToggleGroup({ label, value, onChange, options, tabbable }) {
               event.currentTarget.parentElement?.children[nextIndex]?.focus();
             }}
           >
-            <FormatIcon type={option.icon} />
+            {OptionIcon ? (
+              <OptionIcon className="format-icon" size={18} weight="regular" aria-hidden="true" />
+            ) : (
+              <FormatIcon type={option.icon} />
+            )}
             <span>{option.label}</span>
           </button>
         );
@@ -188,18 +205,20 @@ function VrViewport({
   videoRef,
   mediaSource,
   mediaType,
+  imageView,
   projection,
   stereo,
   recenterSignal,
   onInteraction,
   onDragStateChange,
   onFirstDrag,
+  onDepthStatusChange,
   onImageLoaded,
   onMediaError,
 }) {
   const hostRef = useRef(null);
   const cameraRef = useRef(null);
-  const sphereRef = useRef(null);
+  const surfaceRef = useRef(null);
   const textureRef = useRef(null);
   const yawRef = useRef(0);
   const pitchRef = useRef(0);
@@ -208,6 +227,7 @@ function VrViewport({
   const interactionRef = useRef(onInteraction);
   const dragStateRef = useRef(onDragStateChange);
   const firstDragRef = useRef(onFirstDrag);
+  const depthStatusRef = useRef(onDepthStatusChange);
   const imageLoadedRef = useRef(onImageLoaded);
   const mediaErrorRef = useRef(onMediaError);
 
@@ -217,19 +237,42 @@ function VrViewport({
     interactionRef.current = onInteraction;
     dragStateRef.current = onDragStateChange;
     firstDragRef.current = onFirstDrag;
+    depthStatusRef.current = onDepthStatusChange;
     imageLoadedRef.current = onImageLoaded;
     mediaErrorRef.current = onMediaError;
-  }, [onDragStateChange, onFirstDrag, onImageLoaded, onInteraction, onMediaError, projection, stereo]);
+  }, [
+    imageView,
+    onDepthStatusChange,
+    onDragStateChange,
+    onFirstDrag,
+    onImageLoaded,
+    onInteraction,
+    onMediaError,
+    projection,
+    stereo,
+  ]);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return undefined;
     dragStateRef.current(false);
+    const isSpatialPhoto = mediaType === "image" && imageView === "spatial";
     let disposed = false;
     let sourceVideo = null;
+    let depthTexture = null;
+    let backdrop = null;
+    let backdropMaterial = null;
+    let photoGroup = null;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(76, 1, 0.1, 220);
+    if (isSpatialPhoto) scene.background = new THREE.Color(0x05080c);
+    const camera = isSpatialPhoto
+      ? new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 220)
+      : new THREE.PerspectiveCamera(76, 1, 0.1, 220);
+    if (isSpatialPhoto) {
+      camera.position.z = 3;
+      camera.zoom = 1;
+    }
     cameraRef.current = camera;
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -237,24 +280,61 @@ function VrViewport({
     renderer.domElement.className = "vr-canvas";
     renderer.domElement.setAttribute(
       "aria-label",
-      `${mediaType === "image" ? "VR image" : "VR video"}. Drag to look around.`,
+      isSpatialPhoto
+        ? "AI depth photo. Drag to explore the depth."
+        : `${mediaType === "image" ? "VR image" : "VR video"}. Drag to look around.`,
     );
     renderer.domElement.setAttribute("role", "img");
     renderer.domElement.dataset.mediaType = mediaType;
+    renderer.domElement.dataset.imageView = imageView;
     renderer.domElement.dataset.projection = projectionRef.current;
     renderer.domElement.dataset.geometryCoverage = projectionRef.current === "VR180" ? "180" : "360";
+    renderer.domElement.dataset.depthStatus = isSpatialPhoto ? "loading" : "inactive";
     host.appendChild(renderer.domElement);
 
-    const geometry = createViewportGeometry(projectionRef.current);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const sphere = new THREE.Mesh(geometry, material);
-    sphereRef.current = sphere;
-    scene.add(sphere);
+    const initialPhotoSize = getPhotoPlaneSize(16, 9);
+    const geometry = isSpatialPhoto
+      ? new THREE.PlaneGeometry(initialPhotoSize.width, initialPhotoSize.height, 64, 64)
+      : createViewportGeometry(projectionRef.current);
+    const material = isSpatialPhoto
+      ? new THREE.MeshStandardMaterial({
+          color: 0x000000,
+          emissive: 0xffffff,
+          emissiveIntensity: 1,
+          metalness: 0,
+          roughness: 1,
+          side: THREE.DoubleSide,
+        })
+      : new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const surface = new THREE.Mesh(geometry, material);
+    surfaceRef.current = surface;
+    if (isSpatialPhoto) {
+      photoGroup = new THREE.Group();
+      backdropMaterial = new THREE.MeshBasicMaterial({ color: 0x8f9499 });
+      backdrop = new THREE.Mesh(
+        new THREE.PlaneGeometry(initialPhotoSize.width, initialPhotoSize.height),
+        backdropMaterial,
+      );
+      backdrop.position.z = -0.22;
+      photoGroup.add(backdrop, surface);
+      scene.add(photoGroup);
+      depthStatusRef.current?.({
+        message: "Preparing AI depth model…",
+        progress: null,
+        status: "loading",
+      });
+    } else {
+      scene.add(surface);
+      depthStatusRef.current?.({ status: "inactive" });
+    }
 
     const configureStereo = (texture) => {
       texture.repeat.set(1, 1);
       texture.offset.set(0, 0);
-      if (stereoRef.current === "SBS") {
+      if (isSpatialPhoto) {
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+      } else if (stereoRef.current === "SBS") {
         texture.wrapS = THREE.ClampToEdgeWrapping;
         texture.repeat.x = 0.5;
       } else if (stereoRef.current === "Top/Bottom") {
@@ -263,6 +343,104 @@ function VrViewport({
         texture.offset.y = 0.5;
       }
       texture.needsUpdate = true;
+    };
+
+    const fitSpatialPhoto = () => {
+      if (!isSpatialPhoto || !photoGroup) return;
+      const visibleHeight = SPATIAL_FRAMING_HEIGHT;
+      const visibleWidth = visibleHeight * camera.aspect;
+      const photoWidth = surface.geometry.parameters?.width || initialPhotoSize.width;
+      const photoHeight = surface.geometry.parameters?.height || initialPhotoSize.height;
+      const scale = Math.min(visibleWidth / photoWidth, visibleHeight / photoHeight) * 0.86;
+      photoGroup.scale.setScalar(scale);
+    };
+
+    const configureSpatialGeometry = (width, height) => {
+      if (!isSpatialPhoto || !backdrop) return;
+      const photoSize = getPhotoPlaneSize(width, height);
+      const segments = getPhotoGeometrySegments(width, height);
+      const previousSurfaceGeometry = surface.geometry;
+      const previousBackdropGeometry = backdrop.geometry;
+      surface.geometry = new THREE.PlaneGeometry(
+        photoSize.width,
+        photoSize.height,
+        segments.x,
+        segments.y,
+      );
+      backdrop.geometry = new THREE.PlaneGeometry(photoSize.width, photoSize.height);
+      previousSurfaceGeometry.dispose();
+      previousBackdropGeometry.dispose();
+      fitSpatialPhoto();
+    };
+
+    const generateSpatialDepth = async (image, cacheKey) => {
+      if (!isSpatialPhoto) return;
+      try {
+        const imageBitmap = await createImageBitmap(image);
+        if (disposed) {
+          imageBitmap.close();
+          return;
+        }
+        const depth = await estimateImageDepth({
+          cacheKey,
+          imageBitmap,
+          onFallback: () => {
+            if (disposed) return;
+            depthStatusRef.current?.({
+              message: "Switching to compatibility mode…",
+              progress: null,
+              status: "loading",
+            });
+          },
+          onProgress: (progress) => {
+            if (disposed) return;
+            const percent = Number.isFinite(progress?.progress)
+              ? Math.round(progress.progress)
+              : null;
+            depthStatusRef.current?.({
+              message: percent === null
+                ? "Loading AI depth model…"
+                : `Loading AI depth model… ${percent}%`,
+              progress: percent,
+              status: "loading",
+            });
+          },
+        });
+        if (disposed) return;
+
+        depthTexture = new THREE.DataTexture(
+          depth.data,
+          depth.width,
+          depth.height,
+          THREE.RedFormat,
+          THREE.UnsignedByteType,
+        );
+        depthTexture.flipY = true;
+        depthTexture.minFilter = THREE.LinearFilter;
+        depthTexture.magFilter = THREE.LinearFilter;
+        depthTexture.needsUpdate = true;
+        material.displacementMap = depthTexture;
+        material.displacementScale = 0.48;
+        material.displacementBias = -0.17;
+        material.needsUpdate = true;
+        renderer.domElement.dataset.depthStatus = "ready";
+        renderer.domElement.dataset.depthBackend = depth.backend;
+        depthStatusRef.current?.({
+          backend: depth.backend,
+          message: `AI depth ready · ${depth.backend}`,
+          progress: 100,
+          status: "ready",
+        });
+      } catch (error) {
+        if (disposed) return;
+        console.error("AI depth estimation failed", error);
+        renderer.domElement.dataset.depthStatus = "error";
+        depthStatusRef.current?.({
+          message: "AI depth unavailable. Showing the photo flat.",
+          progress: null,
+          status: "error",
+        });
+      }
     };
 
     const attachVideoTexture = () => {
@@ -317,16 +495,35 @@ function VrViewport({
           texture.wrapS = THREE.RepeatWrapping;
           configureStereo(texture);
           textureRef.current = texture;
-          material.map = texture;
+          if (isSpatialPhoto) {
+            material.emissiveMap = texture;
+          } else {
+            material.map = texture;
+          }
           material.needsUpdate = true;
+          if (backdropMaterial) {
+            backdropMaterial.map = texture;
+            backdropMaterial.needsUpdate = true;
+          }
           renderer.domElement.dataset.imageTexture = "ready";
 
           if (mediaType === "image" && mediaSource) {
             const image = texture.image;
+            configureSpatialGeometry(
+              image?.naturalWidth || image?.width || 0,
+              image?.naturalHeight || image?.height || 0,
+            );
             imageLoadedRef.current?.({
               width: image?.naturalWidth || image?.width || 0,
               height: image?.naturalHeight || image?.height || 0,
             });
+            if (isSpatialPhoto) {
+              void generateSpatialDepth(image, mediaSource);
+            }
+          } else if (isSpatialPhoto) {
+            const image = texture.image;
+            configureSpatialGeometry(image?.width || 0, image?.height || 0);
+            void generateSpatialDepth(image, textureSource);
           }
         },
         undefined,
@@ -341,11 +538,26 @@ function VrViewport({
     const resize = () => {
       const { clientWidth, clientHeight } = host;
       camera.aspect = clientWidth / Math.max(clientHeight, 1);
+      if (isSpatialPhoto) {
+        camera.left = (-SPATIAL_FRAMING_HEIGHT * camera.aspect) / 2;
+        camera.right = (SPATIAL_FRAMING_HEIGHT * camera.aspect) / 2;
+        camera.top = SPATIAL_FRAMING_HEIGHT / 2;
+        camera.bottom = -SPATIAL_FRAMING_HEIGHT / 2;
+      }
       camera.updateProjectionMatrix();
       renderer.setSize(clientWidth, clientHeight, false);
+      fitSpatialPhoto();
     };
 
     const render = () => {
+      if (isSpatialPhoto) {
+        const spatialPosition = getSpatialCameraPosition(yawRef.current, pitchRef.current);
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, spatialPosition.x, 0.14);
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, spatialPosition.y, 0.14);
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
+        return;
+      }
       const phi = THREE.MathUtils.degToRad(90 - pitchRef.current);
       const theta = THREE.MathUtils.degToRad(yawRef.current);
       const target = new THREE.Vector3(
@@ -376,14 +588,17 @@ function VrViewport({
     };
     const pointerMove = (event) => {
       if (!drag.active) return;
-      const sensitivity = 0.115 * (camera.fov / 76);
+      const sensitivity = isSpatialPhoto ? 0.04 : 0.115 * (camera.fov / 76);
       const nextYaw = yawRef.current + (event.clientX - drag.x) * sensitivity;
-      yawRef.current =
-        projectionRef.current === "VR180" ? THREE.MathUtils.clamp(nextYaw, -90, 90) : nextYaw;
+      yawRef.current = isSpatialPhoto
+        ? THREE.MathUtils.clamp(nextYaw, -SPATIAL_MAX_YAW, SPATIAL_MAX_YAW)
+        : projectionRef.current === "VR180"
+          ? THREE.MathUtils.clamp(nextYaw, -90, 90)
+          : nextYaw;
       pitchRef.current = THREE.MathUtils.clamp(
         pitchRef.current + (event.clientY - drag.y) * sensitivity,
-        -82,
-        82,
+        isSpatialPhoto ? -SPATIAL_MAX_PITCH : -82,
+        isSpatialPhoto ? SPATIAL_MAX_PITCH : 82,
       );
       renderer.domElement.dataset.yaw = yawRef.current.toFixed(2);
       renderer.domElement.dataset.pitch = pitchRef.current.toFixed(2);
@@ -400,7 +615,11 @@ function VrViewport({
     };
     const wheel = (event) => {
       event.preventDefault();
-      camera.fov = THREE.MathUtils.clamp(camera.fov + event.deltaY * 0.035, 40, 100);
+      if (isSpatialPhoto) {
+        camera.zoom = THREE.MathUtils.clamp(camera.zoom - event.deltaY * 0.001, 0.72, 1.8);
+      } else {
+        camera.fov = THREE.MathUtils.clamp(camera.fov + event.deltaY * 0.035, 40, 100);
+      }
       camera.updateProjectionMatrix();
       interactionRef.current();
     };
@@ -422,14 +641,17 @@ function VrViewport({
       canvas.removeEventListener("pointerup", pointerUp);
       canvas.removeEventListener("pointercancel", pointerUp);
       canvas.removeEventListener("wheel", wheel);
-      sphereRef.current?.geometry.dispose();
+      surfaceRef.current?.geometry.dispose();
+      backdrop?.geometry.dispose();
+      backdropMaterial?.dispose();
       material.dispose();
+      depthTexture?.dispose();
       textureRef.current?.dispose();
       renderer.dispose();
       renderer.domElement.remove();
-      sphereRef.current = null;
+      surfaceRef.current = null;
     };
-  }, [mediaSource, mediaType, videoRef]);
+  }, [imageView, mediaSource, mediaType, videoRef]);
 
   useEffect(() => {
     yawRef.current = 0;
@@ -440,17 +662,24 @@ function VrViewport({
       canvas.dataset.pitch = "0.00";
     }
     if (cameraRef.current) {
-      cameraRef.current.fov = 76;
+      if (mediaType === "image" && imageView === "spatial") {
+        cameraRef.current.zoom = 1;
+      } else {
+        cameraRef.current.fov = 76;
+      }
+      cameraRef.current.position.x = 0;
+      cameraRef.current.position.y = 0;
       cameraRef.current.updateProjectionMatrix();
     }
-  }, [recenterSignal]);
+  }, [imageView, mediaType, recenterSignal]);
 
   useEffect(() => {
-    const sphere = sphereRef.current;
-    if (!sphere || sphere.geometry.userData.projection === projection) return;
+    if (imageView === "spatial") return;
+    const surface = surfaceRef.current;
+    if (!surface || surface.geometry.userData.projection === projection) return;
 
-    const previousGeometry = sphere.geometry;
-    sphere.geometry = createViewportGeometry(projection);
+    const previousGeometry = surface.geometry;
+    surface.geometry = createViewportGeometry(projection);
     previousGeometry.dispose();
 
     if (projection === "VR180") {
@@ -462,9 +691,10 @@ function VrViewport({
       canvas.dataset.geometryCoverage = projection === "VR180" ? "180" : "360";
       canvas.dataset.yaw = yawRef.current.toFixed(2);
     }
-  }, [projection]);
+  }, [imageView, projection]);
 
   useEffect(() => {
+    if (imageView === "spatial") return;
     const texture = textureRef.current;
     if (!texture) return;
     texture.repeat.set(1, 1);
@@ -485,7 +715,7 @@ function VrViewport({
       canvas.dataset.textureRepeat = `${texture.repeat.x},${texture.repeat.y}`;
       canvas.dataset.textureOffset = `${texture.offset.x},${texture.offset.y}`;
     }
-  }, [stereo]);
+  }, [imageView, stereo]);
 
   return <div ref={hostRef} className="vr-viewport" />;
 }
@@ -525,6 +755,8 @@ export function App() {
     IS_IMAGE_DEMO ? "./assets/coastal-panorama.png" : "",
   );
   const [mediaType, setMediaType] = useState(IS_IMAGE_DEMO ? "image" : "video");
+  const [imageView, setImageView] = useState(IS_SPATIAL_DEMO ? "spatial" : "immersive");
+  const [depthStatus, setDepthStatus] = useState({ status: "inactive" });
   const [sourceError, setSourceError] = useState("");
   const [projection, setProjection] = useState("VR180");
   const [stereo, setStereo] = useState(IS_IMAGE_DEMO ? "Mono" : "SBS");
@@ -783,6 +1015,8 @@ export function App() {
       setItem({ name: file.name, width: 0, height: 0, size: file.size || 0 });
       setMediaSource(objectUrl);
       setMediaType(nextMediaType);
+      setImageView("immersive");
+      setDepthStatus({ status: "inactive" });
       dragPlaybackPendingRef.current = nextMediaType === "video";
       if (nextMediaType === "image") {
         setIsLooping(false);
@@ -965,6 +1199,8 @@ export function App() {
         dragPlaybackPendingRef.current = nextMediaType === "video";
         if (nextMediaType === "image") setIsLooping(false);
         setMediaType(nextMediaType);
+        setImageView("immersive");
+        setDepthStatus({ status: "inactive" });
         setMediaSource(selectedMediaSource);
         setCurrentTime(0);
       } catch (error) {
@@ -1183,6 +1419,30 @@ export function App() {
     [revealControls, stereo],
   );
 
+  const changeImageView = useCallback(
+    (nextImageView) => {
+      if (mediaType !== "image" || nextImageView === imageView) {
+        revealControls();
+        return;
+      }
+      setImageView(nextImageView);
+      setDepthStatus(
+        nextImageView === "spatial"
+          ? {
+              message: "Preparing AI depth model…",
+              progress: null,
+              status: "loading",
+            }
+          : { status: "inactive" },
+      );
+      setHasDragged(false);
+      setShowRecenterFeedback(false);
+      setRecenterSignal((value) => value + 1);
+      revealControls();
+    },
+    [imageView, mediaType, revealControls],
+  );
+
   const togglePlayback = useCallback(async () => {
     revealControls();
     if (playbackDisabled) return;
@@ -1385,6 +1645,8 @@ export function App() {
       data-recenter-feedback={showRecenterFeedback ? "visible" : "hidden"}
       data-projection={projection}
       data-stereo={stereo}
+      data-image-view={imageView}
+      data-depth-status={depthStatus.status}
       data-drop-active={isDropActive ? "true" : "false"}
       data-media-type={mediaType}
     >
@@ -1422,12 +1684,14 @@ export function App() {
         videoRef={videoRef}
         mediaSource={mediaSource}
         mediaType={mediaType}
+        imageView={imageView}
         projection={projection}
         stereo={stereo}
         recenterSignal={recenterSignal}
         onInteraction={handleViewportInteraction}
         onDragStateChange={setIsDragging}
         onFirstDrag={handleFirstViewportDrag}
+        onDepthStatusChange={setDepthStatus}
         onImageLoaded={({ width, height }) => {
           setItem((currentItem) => ({
             ...currentItem,
@@ -1509,29 +1773,62 @@ export function App() {
           </div>
         </div>
 
-        <div className="format-controls" role="group" aria-label="VR format">
-          <FormatToggleGroup
-            label="Projection"
-            value={projection}
-            onChange={changeProjection}
-            tabbable={controlsVisible}
-            options={[
-              { value: "VR180", label: "180°", icon: "VR180", ariaLabel: "180 degree projection" },
-              { value: "VR360", label: "360°", icon: "VR360", ariaLabel: "360 degree projection" },
-            ]}
-          />
-          <span className="control-divider" />
-          <FormatToggleGroup
-            label="Stereo layout"
-            value={stereo}
-            onChange={changeStereo}
-            tabbable={controlsVisible}
-            options={[
-              { value: "SBS", label: "SBS", icon: "SBS", ariaLabel: "Side by side" },
-              { value: "Top/Bottom", label: "TB", icon: "TB", ariaLabel: "Top and bottom" },
-              { value: "Mono", label: "Mono", icon: "Mono", ariaLabel: "Monoscopic" },
-            ]}
-          />
+        <div
+          className={`format-controls${mediaType === "image" ? " has-image-view" : ""}`}
+          role="group"
+          aria-label={mediaType === "image" ? "Image view" : "VR format"}
+        >
+          {mediaType === "image" ? (
+            <>
+              <FormatToggleGroup
+                label="Image view"
+                value={imageView}
+                onChange={changeImageView}
+                tabbable={controlsVisible}
+                options={[
+                  {
+                    value: "immersive",
+                    label: "VR",
+                    icon: "VR180",
+                    ariaLabel: "VR panorama view",
+                  },
+                  {
+                    value: "spatial",
+                    label: "3D Photo",
+                    iconComponent: CubeTransparent,
+                    ariaLabel: "AI depth photo view",
+                  },
+                ]}
+              />
+              {imageView === "immersive" ? <span className="control-divider" /> : null}
+            </>
+          ) : null}
+          {mediaType !== "image" || imageView === "immersive" ? (
+            <>
+              <FormatToggleGroup
+                label="Projection"
+                value={projection}
+                onChange={changeProjection}
+                tabbable={controlsVisible}
+                options={[
+                  { value: "VR180", label: "180°", icon: "VR180", ariaLabel: "180 degree projection" },
+                  { value: "VR360", label: "360°", icon: "VR360", ariaLabel: "360 degree projection" },
+                ]}
+              />
+              <span className="control-divider" />
+              <FormatToggleGroup
+                label="Stereo layout"
+                value={stereo}
+                onChange={changeStereo}
+                tabbable={controlsVisible}
+                options={[
+                  { value: "SBS", label: "SBS", icon: "SBS", ariaLabel: "Side by side" },
+                  { value: "Top/Bottom", label: "TB", icon: "TB", ariaLabel: "Top and bottom" },
+                  { value: "Mono", label: "Mono", icon: "Mono", ariaLabel: "Monoscopic" },
+                ]}
+              />
+            </>
+          ) : null}
         </div>
 
         <div className="top-actions">
@@ -1658,7 +1955,7 @@ export function App() {
       {!hasDragged ? (
         <div className="drag-hint" aria-hidden="true">
           <HandGrabbing size={34} weight="light" />
-          <span>Drag to look around</span>
+          <span>{imageView === "spatial" ? "Drag to explore depth" : "Drag to look around"}</span>
         </div>
       ) : null}
 
@@ -1670,6 +1967,27 @@ export function App() {
       </div>
 
       {sourceError ? <div className="status-toast" role="status">{sourceError}</div> : null}
+
+      {mediaType === "image" &&
+      imageView === "spatial" &&
+      depthStatus.status !== "ready" &&
+      depthStatus.status !== "inactive" ? (
+        <div
+          className={`depth-status depth-status-${depthStatus.status}`}
+          role="status"
+          aria-live="polite"
+        >
+          {depthStatus.status === "loading" ? <span className="depth-spinner" aria-hidden="true" /> : null}
+          <span>{depthStatus.message}</span>
+          {depthStatus.status === "loading" && Number.isFinite(depthStatus.progress) ? (
+            <span
+              className="depth-progress"
+              aria-hidden="true"
+              style={{ "--depth-progress": `${depthStatus.progress}%` }}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       <section
         className={`transport control-surface${playbackDisabled ? " has-static-media" : ""}`}

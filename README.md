@@ -7,6 +7,7 @@ View VR180 and VR360 videos and images on your desktop without a headset. Load t
 ## Features
 
 - VR180 and VR360 video and image preview
+- Optional AI-powered 3D Photo view for ordinary still images
 - Side-by-side (SBS), top/bottom (TB), and Mono layouts
 - Opens the selected Eagle item or a dropped video or image
 - Reads VR format tags and optionally writes them to connected Eagle items
@@ -15,6 +16,17 @@ View VR180 and VR360 videos and images on your desktop without a headset. Load t
 
 > [!NOTE]
 > This player does not support stereoscopic rendering.
+
+## 3D Photo Preview
+
+When a still image is open, choose **3D Photo** to estimate a depth map and add
+restrained parallax while dragging. The original file is not modified, and this
+view does not change the item's VR projection or stereo tags.
+
+Depth Anything V2 runs locally through Transformers.js. The model is downloaded
+and cached on first use; later conversions reuse that model and recent depth
+results. When WebGPU is unavailable, the player falls back to a WASM-compatible
+model.
 
 ## Install for Development
 

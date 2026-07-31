@@ -4,9 +4,9 @@
   "platform": "all",
   "arch": "all",
   "name": "VR Player",
-  "description": "View VR180 and VR360 videos and images on your desktop without a headset.",
+  "description": "View VR180, VR360, and AI depth photos on your desktop without a headset.",
   "logo": "/logo.png",
-  "keywords": ["VR", "VR180", "VR360", "video", "image", "preview"],
+  "keywords": ["VR", "VR180", "VR360", "3D photo", "AI depth", "video", "image", "preview"],
   "devTools": false,
   "main": {
     "url": "dist/index.html",
