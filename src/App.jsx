@@ -19,6 +19,7 @@ import {
   saveFormatTags,
 } from "./formatTags.js";
 import { loadDroppedEagleItem } from "./eagleDropLink.js";
+import { getEagleItemMediaSource } from "./eagleMediaSource.js";
 import { detectMediaType } from "./mediaType.js";
 import {
   canActivateTagWriteConnection,
@@ -939,6 +940,12 @@ export function App() {
           setSourceError(`.${ext || "unknown"} is not a supported video or image format.`);
           return;
         }
+        const selectedMediaSource = getEagleItemMediaSource(selectedItem);
+        if (!selectedMediaSource) {
+          setTagWriteStatus("The selected Eagle item path is unavailable.");
+          setSourceError("The selected media file could not be opened.");
+          return;
+        }
         const selectedFormat = applyEagleItemFormat(selectedItem, nextMediaType);
         stageTagWriteConnection(
           selectedItem,
@@ -958,7 +965,7 @@ export function App() {
         dragPlaybackPendingRef.current = nextMediaType === "video";
         if (nextMediaType === "image") setIsLooping(false);
         setMediaType(nextMediaType);
-        setMediaSource(selectedItem.fileURL || `file://${selectedItem.filePath}`);
+        setMediaSource(selectedMediaSource);
         setCurrentTime(0);
       } catch (error) {
         if (!active || requestId !== mediaLoadRequestRef.current) return;
