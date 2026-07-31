@@ -6,19 +6,12 @@ View VR180 and VR360 videos and images on your desktop without a headset. Load t
 
 ## Features
 
-- VR180 and VR360 projection modes
-- Side-by-side (SBS), top/bottom (TB), and monoscopic media layouts
-- Automatically loads the video or image currently selected in Eagle
-- Still-image preview defaulting to VR180 and Mono, with playback, seek, and volume controls disabled
-- Drag-and-drop support for opening another video or image, including format-tag loading for matching items in the current Eagle library
-- Starts video playback when the first view drag begins without resuming on later drags after a pause
-- Optional loop playback from the transport controls
-- View dragging during playback and mouse-wheel zoom
-- Automatic format detection from Eagle tags
-- Optional format-tag writing, disabled by default and remembered between sessions
-- Focus mode for uninterrupted playback and view control
-- Controls that fade out when the player is idle
-- Reset-view feedback that fades out automatically
+- VR180 and VR360 video and image preview
+- Side-by-side (SBS), top/bottom (TB), and Mono layouts
+- Opens the selected Eagle item or a dropped video or image
+- Reads VR format tags and optionally writes them to connected Eagle items
+- Drag-to-look, first-drag video playback, mouse-wheel zoom, and looping
+- Focus mode and auto-hiding controls
 
 > [!NOTE]
 > This player does not support stereoscopic rendering.
@@ -56,11 +49,11 @@ The build automatically includes `manifest.json` and the distributable `logo.png
 | Enter focus mode | `F` |
 | Exit focus mode | `Esc` |
 
-The controls hide after approximately 0.5 seconds of inactivity during playback and 1.5 seconds while paused, stopped, or viewing an image. They return on pointer, touch, or keyboard input and remain visible while the pointer is over the top or playback controls.
+Controls hide after approximately 0.5 seconds while playing and 1.5 seconds otherwise. Pointer, touch, or keyboard input reveals them, and hovering over the controls keeps them visible.
 
-## Format Tags
+## VR Format Tags
 
-VR Player reads the following Eagle tags when an item loads:
+VR Player reads these VR format tags from connected Eagle items:
 
 ```text
 vr:projection=VR180
@@ -70,10 +63,10 @@ vr:mode=TB
 vr:mode=Mono
 ```
 
-Enable **Write format tags** under **More options** to save the current Projection and Stereo layout to the connected Eagle item. When you turn it on, VR Player immediately updates only the item's `vr:projection=` and `vr:mode=` tags. If you later change either setting in the player, VR Player updates the corresponding tag again. All other tags, including other `vr:*` tags added by you or another tool, are left unchanged. This option is off by default.
+**Write format tags** is off by default and remembered between sessions. When enabled, VR Player immediately writes the current projection and layout to the connected Eagle item, then writes both again whenever another item connects or either setting changes. It replaces only `vr:projection=` and `vr:mode=` and preserves all other tags, including custom `vr:*` tags.
 
 > [!NOTE]
-> Files opened by drag and drop play as local files. If a dropped file's path exactly matches an item in the current Eagle library, VR Player connects that item and loads its format tags. Other dropped files remain unlinked, so their Eagle item tags cannot be read or written.
+> Dropped files play locally. If a file's path exactly matches an item in the current Eagle library, VR Player connects it and can read or write its VR format tags. Otherwise, it remains unlinked.
 
 ## Local Preview
 
